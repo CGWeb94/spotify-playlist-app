@@ -1,11 +1,7 @@
-const CLIENT_ID = "DEIN_SPOTIFY_CLIENT_ID";
-const REDIRECT_URI = "http://localhost:5173/callback"; // Später auf Vercel/Render anpassen
-const SCOPES = [
-  "user-library-read",
-  "playlist-read-private",
-  "playlist-modify-public",
-  "playlist-modify-private"
-].join("%20");
+// src/components/LoginButton.jsx
+const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI;
+const SCOPES = import.meta.env.VITE_SPOTIFY_SCOPES.replace(/ /g, "%20");
 
 export default function LoginButton() {
   const handleLogin = () => {
