@@ -10,34 +10,40 @@ export default function App() {
   const [playlists, setPlaylists] = useState([]);
   const [tracks, setTracks] = useState([]);
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL; // z.B. https://spotify-playlist-app-backend.onrender.com
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-  // Authorization Code aus URL holen und Access Token vom Backend abrufen
+  // 🔹 Authorization Code aus URL holen & Access Token vom Backend abrufen
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
+    // Nur einmal ausführen, wenn noch kein Token gesetzt ist
     if (code && !token) {
       axios
         .post(`${BACKEND_URL}/auth/token`, { code })
-        .then(res => setToken(res.data.access_token))
-        .catch(err => console.error(err));
+        .then((res) => {
+          setToken(res.data.access_token);
+
+          // URL sauber machen, damit code nicht mehr in der Adressleiste ist
+          window.history.replaceState({}, document.title, "/");
+        })
+        .catch((err) => console.error(err));
     }
   }, [token]);
 
-  // Playlists laden
+  // 🔹 Playlists laden
   useEffect(() => {
     if (token) {
       axios
         .get("https://api.spotify.com/v1/me/playlists", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         })
-        .then(res => setPlaylists(res.data.items))
-        .catch(err => console.error(err));
+        .then((res) => setPlaylists(res.data.items))
+        .catch((err) => console.error(err));
     }
   }, [token]);
 
-  // Tracks aus allen Playlists laden (erste 50 Songs pro Playlist)
+  // 🔹 Tracks aus allen Playlists laden
   useEffect(() => {
     if (token && playlists.length > 0) {
       const fetchTracks = async () => {
