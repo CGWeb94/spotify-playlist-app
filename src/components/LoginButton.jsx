@@ -8,7 +8,8 @@ export default function LoginButton() {
   const SCOPES = import.meta.env.VITE_SPOTIFY_SCOPES.replace(/ /g, "%20"); // Leerzeichen -> %20 für URL
 
   const handleLogin = () => {
-    const authUrl = `https://accounts.spotify.com/authorize?response_type=token&client_id=${CLIENT_ID}&scope=${SCOPES}&redirect_uri=${REDIRECT_URI}`;
+    // Authorization Code Flow
+    const authUrl = `https://accounts.spotify.com/authorize?response_type=code&client_id=${CLIENT_ID}&scope=${SCOPES}&redirect_uri=${REDIRECT_URI}`;
     window.location.href = authUrl; // Weiterleitung zu Spotify Login
   };
 
