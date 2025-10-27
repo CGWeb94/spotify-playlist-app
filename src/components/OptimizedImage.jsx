@@ -5,7 +5,7 @@ import React, { useRef, useState, useEffect } from "react";
  * props:
  *  - srcs: array of image urls (prefer [large, medium, small] or ([small] works))
  *  - alt, className
- *  - placeholder: url for a tiny placeholder (optional)
+ *  - placeholder: url for a tiny placeholder (optional, fallback to icon)
  *  - style: extra style
  */
 export default function OptimizedImage({ srcs = [], alt = "", className = "", placeholder = "", style = {} }) {
@@ -14,7 +14,6 @@ export default function OptimizedImage({ srcs = [], alt = "", className = "", pl
   const [loaded, setLoaded] = useState(false);
   const [src, setSrc] = useState("");
 
-  // lazy-init via IntersectionObserver
   useEffect(() => {
     if (!ref.current) return;
     const obs = new IntersectionObserver(
@@ -32,10 +31,8 @@ export default function OptimizedImage({ srcs = [], alt = "", className = "", pl
     return () => obs.disconnect();
   }, []);
 
-  // choose best available src when in view
   useEffect(() => {
     if (!inView) return;
-    // prefer medium/small if provided to save bandwidth
     const candidate = srcs.find(Boolean) || placeholder || "";
     setSrc(candidate);
   }, [inView, srcs, placeholder]);
@@ -45,12 +42,19 @@ export default function OptimizedImage({ srcs = [], alt = "", className = "", pl
       ref={ref}
       className={`opt-img-wrap ${className}`}
       style={{
-        backgroundImage: !loaded && (placeholder ? `url(${placeholder})` : "none"),
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "#000",
         ...style,
       }}
     >
+      {/* placeholder: FontAwesome icon centered on black blurred bg while image not loaded */}
+      {!loaded && (
+        <div className="opt-placeholder" aria-hidden="true">
+          <i className="fa-solid fa-image" />
+        </div>
+      )}
+
       {src ? (
         <img
           src={src}
