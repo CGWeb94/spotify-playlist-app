@@ -4,27 +4,50 @@ const sign = (val, secret) =>
   crypto.createHmac("sha256", secret).update(val).digest("hex");
 
 module.exports = async (req, res) => {
-  // only allow POST
   if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
 
-  const { password } = req.body || {};
-  const SITE_PASSWORD = process.env.SITE_PASSWORD; // set in Vercel dashboard
+  // robust body parse
+  let body = {};
+  try {
+    const raw = await new Promise((resolve, reject) => {
+      let data = "";
+      req.on("data", (chunk) => (data += chunk));
+      req.on("end", () => resolve(data));
+      req.on("error", reject);
+    });
+    if (raw) body = JSON.parse(raw);
+  } catch (e) {
+    // ignore parse error
+    body = {};
+  }
+
+  const inputPassword = (body.password || "").toString();
+  const SITE_PASSWORD = process.env.SITE_PASSWORD;
   const SESSION_SECRET = process.env.SESSION_SECRET || "change_this_long_secret";
 
-  if (!SITE_PASSWORD) return res.status(500).json({ ok: false, message: "Server not configured" });
+  // debug logs (no secret values printed)
+  console.log("LOGIN DEBUG: SITE_PASSWORD set:", !!SITE_PASSWORD, "SITE_PASSWORD length:", SITE_PASSWORD ? SITE_PASSWORD.length : 0);
+  console.log("LOGIN DEBUG: received password length:", inputPassword.length);
 
-  if (!password || password !== SITE_PASSWORD) {
+  if (!SITE_PASSWORD) {
+    console.error("LOGIN DEBUG: SITE_PASSWORD not configured in environment");
+    return res.status(500).json({ ok: false, message: "Server not configured" });
+  }
+
+  // trim both sides to avoid accidental spaces
+  const ok = inputPassword.trim() === SITE_PASSWORD.trim();
+  console.log("LOGIN DEBUG: password match:", ok);
+
+  if (!inputPassword || !ok) {
     return res.status(401).json({ ok: false, message: "Ungültiges Passwort" });
   }
 
-  // create a signed token (simple: timestamp + signature)
   const payload = `${Date.now()}`;
   const sig = sign(payload, SESSION_SECRET);
   const token = `${payload}.${sig}`;
 
-  // set httpOnly secure cookie (path=/)
-  const cookie = `session=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Lax`;
-  // If you use HTTPS (Vercel) you can add ; Secure
-  res.setHeader("Set-Cookie", cookie + "; Secure");
+  const secureFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  const cookie = `session=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Lax${secureFlag}`;
+  res.setHeader("Set-Cookie", cookie);
   return res.json({ ok: true });
 };
