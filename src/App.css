@@ -272,3 +272,9 @@ body {
   color: var(--text-sub);
   font-size:12px;
 }
+
+/* Make pl-list anchors visible in dark theme */
+#root .playlist-grid + div > div {
+  border-color: rgba(255,255,255,0.03);
+  color: var(--text-sub);
+}

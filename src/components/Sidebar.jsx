@@ -20,6 +20,10 @@ export default function Sidebar({ selected, onSelect, counts = {} }) {
           <i className="fa-solid fa-music me-2"></i> Playlists nach Genre <span className="badge bg-secondary ms-auto">{counts.genres ?? 0}</span>
         </button>
 
+        <button className={`nav-item ${selected === "artists" ? "active" : ""}`} onClick={() => onSelect("artists")}>
+          <i className="fa-solid fa-user-music me-2"></i> Künstler <span className="badge bg-secondary ms-auto">{counts.artists ?? 0}</span>
+        </button>
+
         <button className={`nav-item ${selected === "added" ? "active" : ""}`} onClick={() => onSelect("added")}>
           <i className="fa-solid fa-calendar-plus me-2"></i> Nach Jahr hinzugefügt <span className="badge bg-secondary ms-auto">{counts.addedYears ?? 0}</span>
         </button>

@@ -7,6 +7,7 @@ import GenreGrid from "./components/GenreGrid";
 import GenreTracks from "./components/GenreTracks";
 import YearGrid from "./components/YearGrid";
 import Sidebar from "./components/Sidebar";
+import ArtistsGrid from "./components/ArtistsGrid";
 import "./App.css";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [playlists, setPlaylists] = useState([]);
   const [tracks, setTracks] = useState([]);
   const [genreGroups, setGenreGroups] = useState([]);
+  const [artistGroups, setArtistGroups] = useState([]); // <-- neu
   const [addedYearGroups, setAddedYearGroups] = useState([]);
   const [releasedYearGroups, setReleasedYearGroups] = useState([]);
 
@@ -143,7 +145,10 @@ export default function App() {
 
         const promises = playlists.map((pl) => fetchAllForPlaylist(pl.id, pl.name));
         const allResults = await Promise.all(promises);
-        setTracks(allResults.flat());
+        const flattened = allResults.flat();
+        setTracks(flattened);
+        // reset playlist progress so next phase starts from 0
+        setProgress({ current: 0, total: 0 });
         setLoadingMessage("Tracks geladen — erzeuge Genre-/Jahr‑Gruppen...");
       } catch (err) {
         console.error(err);
@@ -155,54 +160,64 @@ export default function App() {
     fetchTracks();
   }, [token, playlists]);
 
-  // Genre-Gruppierung (Artist -> genres), jetzt mit Quellenangaben
+  // Genre & Artists build (Artist-Fetch + Genre-Gruppierung + Artist-Gruppen)
   useEffect(() => {
     if (!token || tracks.length === 0) {
       setGenreGroups([]);
+      setArtistGroups([]);
       return;
     }
-    const build = async () => {
+
+    const buildGenresAndArtists = async () => {
       try {
         setLoading(true);
         setLoadingMessage("Hole Künstlerdaten und gruppiere nach Genre...");
+        // collect unique artist ids
         const artistIds = new Set();
         tracks.forEach((item) => {
-          const track = item.track;
-          if (!track || !track.artists) return;
-          track.artists.forEach((a) => artistIds.add(a.id));
+          const tr = item.track || item;
+          if (!tr || !tr.artists) return;
+          tr.artists.forEach((a) => artistIds.add(a.id));
         });
         const ids = Array.from(artistIds).filter(Boolean);
+
+        // chunk ids (50 per request)
         const chunks = [];
         for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
-        const artistResponses = [];
-        for (const chunk of chunks) {
-          const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          artistResponses.push(res);
-        }
+
+        // reset progress counter for artist-chunks (important fix)
+        setProgress({ current: 0, total: chunks.length || 1 });
 
         const artistMap = new Map();
-        artistResponses.forEach((r) => (r.data.artists || []).forEach((a) => artistMap.set(a.id, a)));
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          try {
+            const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            (res.data.artists || []).forEach((a) => artistMap.set(a.id, a));
+          } catch (err) {
+            console.error("Fehler beim Laden von Künstlern (Chunk)", err?.response?.data || err.message);
+          }
+          // increment progress (now starts at 0)
+          setProgress((p) => ({ ...p, current: (p.current || 0) + 1 }));
+        }
 
-        // genreMap: genre -> { image, tracks: Map<trackId, { track: <trackObj>, sources: Set } > }
+        // build genre groups (with sources) - same approach as before
         const genreMap = new Map();
         tracks.forEach((item) => {
-          const track = item.track;
-          if (!track) return;
-          const trackId = track.id;
+          const tr = item.track || item;
+          if (!tr) return;
+          const trackId = tr.id;
           const playlistName = item._playlistName || "Unbekannt";
-          track.artists.forEach((a) => {
+          (tr.artists || []).forEach((a) => {
             const artist = artistMap.get(a.id);
             const genres = (artist && artist.genres && artist.genres.length) ? artist.genres : ["Unbekannt"];
             genres.forEach((g) => {
               if (!genreMap.has(g)) genreMap.set(g, { image: artist?.images?.[0]?.url || null, tracks: new Map() });
               const entry = genreMap.get(g).tracks;
-              if (!entry.has(trackId)) {
-                entry.set(trackId, { track: track, sources: new Set([playlistName]) });
-              } else {
-                entry.get(trackId).sources.add(playlistName);
-              }
+              if (!entry.has(trackId)) entry.set(trackId, { track: tr, sources: new Set([playlistName]) });
+              else entry.get(trackId).sources.add(playlistName);
             });
           });
         });
@@ -211,18 +226,44 @@ export default function App() {
           genre,
           image: data.image,
           tracks: Array.from(data.tracks.values()).map((v) => ({ ...v.track, sources: Array.from(v.sources) })),
-        }));
-        groups.sort((a, b) => b.tracks.length - a.tracks.length);
+        })).sort((a, b) => b.tracks.length - a.tracks.length);
         setGenreGroups(groups);
+
+        // build artist groups: for each artist in artistMap, collect tracks where they appear
+        const ag = [];
+        for (const [aid, artist] of artistMap.entries()) {
+          const artistTracks = [];
+          tracks.forEach((item) => {
+            const tr = item.track || item;
+            if (!tr) return;
+            const hasArtist = (tr.artists || []).some((a) => a.id === aid);
+            if (hasArtist) {
+              const playlistName = item._playlistName || "Unbekannt";
+              // attach sources if not present
+              const tcopy = { ...tr };
+              tcopy.sources = tcopy.sources || [];
+              if (!tcopy.sources.includes(playlistName)) tcopy.sources.push(playlistName);
+              artistTracks.push(tcopy);
+            }
+          });
+          if (artistTracks.length) {
+            ag.push({ id: aid, name: artist.name, image: artist.images?.[0]?.url || null, tracks: artistTracks });
+          }
+        }
+        // sort by number of tracks
+        ag.sort((a, b) => b.tracks.length - a.tracks.length);
+        setArtistGroups(ag);
       } catch (err) {
         console.error(err);
       } finally {
+        // done
         setLoading(false);
         setLoadingMessage("");
         setProgress({ current: 0, total: 0 });
       }
     };
-    build();
+
+    buildGenresAndArtists();
   }, [token, tracks]);
 
   // Year groups: added_at (when you added to playlists) & release year — jetzt mit Quellen
@@ -434,7 +475,7 @@ export default function App() {
             {section === "playlists" && (
               <div>
                 <h2 style={{ color: "var(--text-main)" }}>Deine Playlists</h2>
-                <PlaylistList playlists={playlists} onTileClick={scrollToPlaylist} />
+                <PlaylistList playlists={playlists} onTileClick={openPlaylistDetail} />
               </div>
             )}
 
@@ -456,6 +497,13 @@ export default function App() {
               <div>
                 <h2 style={{ color: "var(--text-main)" }}>Nach Jahr erschienen</h2>
                 <YearGrid groups={releasedYearGroups} onSelect={(g) => openYearDetail("released", g)} />
+              </div>
+            )}
+
+            {section === "artists" && (
+              <div>
+                <h2 style={{ color: "var(--text-main)" }}>Künstler</h2>
+                <ArtistsGrid groups={artistGroups} onSelect={(g) => openArtistDetail(g)} />
               </div>
             )}
 
