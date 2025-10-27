@@ -493,11 +493,9 @@ export default function App() {
         className="back-top"
         onClick={onBackToTop}
         title="Nach oben"
-        style={{
-          background: `conic-gradient(var(--spotify-green) ${scrollPct}%, rgba(255,255,255,0.06) ${scrollPct}%)`,
-        }}
+        style={{ ['--pct']: `${scrollPct}%` }}
       >
-        <i className="fa-solid fa-arrow-up" style={{ color: "#000" }} />
+        <i className="fa-solid fa-arrow-up" />
       </button>
 
       {/* Loading overlay (kept) */}
