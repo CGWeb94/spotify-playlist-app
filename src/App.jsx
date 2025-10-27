@@ -421,6 +421,14 @@ export default function App() {
     setSection("playlists");
   };
 
+  // open artist detail -> show all tracks for that artist (from your annotated tracks)
+  const openArtistDetail = (artistGroup) => {
+    if (!artistGroup) return;
+    const group = { title: artistGroup.name, image: artistGroup.image || null, tracks: artistGroup.tracks || [] };
+    setSelectedDetail({ kind: "artist", group });
+    setSection("artists");
+  };
+
   // scroll to playlist list element
   const scrollToPlaylist = (id) => {
     setSelectedDetail(null);
@@ -525,6 +533,7 @@ export default function App() {
               counts={{
                 playlists: playlists.length,
                 genres: genreGroups.length,
+                artists: artistGroups.length, // <-- neu: Anzahl Künstler an Sidebar übergeben
                 addedYears: addedYearGroups.length,
                 releasedYears: releasedYearGroups.length,
               }}
