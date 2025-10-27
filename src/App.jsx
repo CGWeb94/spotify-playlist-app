@@ -114,9 +114,12 @@ export default function App() {
 
     const fetchAllForPlaylist = async (playlistId, playlistName) => {
       // special case for saved tracks (liked)
-      let url = playlistId === "liked"
-        ? `https://api.spotify.com/v1/me/tracks?limit=100`
-        : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+      // Spotify /me/tracks limit is max 50
+      const isLiked = playlistId === "liked";
+      const baseLimit = isLiked ? 50 : 100;
+      let url = isLiked
+        ? `https://api.spotify.com/v1/me/tracks?limit=${baseLimit}`
+        : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${baseLimit}`;
 
       const items = [];
       try {
@@ -131,9 +134,21 @@ export default function App() {
         }
       } catch (err) {
         console.error("Fehler beim Laden von Tracks für Playlist:", playlistId, err?.response?.data || err.message);
+        // user-friendly messages for common problems
+        const resp = err?.response?.data;
+        if (resp && resp.error && typeof resp.error.message === "string") {
+          const msg = resp.error.message;
+          if (msg.toLowerCase().includes("invalid limit")) {
+            setLoadingMessage("Fehler: Ungültiger Limit‑Wert beim Laden von Lieblingssongs. Versuche limit=50.");
+          } else if (msg.toLowerCase().includes("insufficient_scope") || err?.response?.status === 401 || err?.response?.status === 403) {
+            setLoadingMessage("Fehler: fehlende Berechtigung (user-library-read). Bitte erneut anmelden mit erweiterten Scopes.");
+          } else {
+            setLoadingMessage(`Fehler beim Laden: ${msg}`);
+          }
+        }
       }
-      // update progress for UI
-      setProgress((p) => ({ ...p, current: p.current + 1 }));
+      // update progress for UI (always increment so bar advances)
+      setProgress((p) => ({ ...p, current: (p.current || 0) + 1 }));
       return items;
     };
 
