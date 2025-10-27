@@ -122,3 +122,23 @@ body { background: #f7f7f8; }
   color: #0b5ed7;
 }
 .content-area { padding-left: 20px; padding-right: 20px; min-height: 400px; }
+
+/* Loading overlay */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.28);
+  z-index: 9999;
+}
+.loading-box {
+  background: #fff;
+  padding: 18px 22px;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(2,6,23,0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
