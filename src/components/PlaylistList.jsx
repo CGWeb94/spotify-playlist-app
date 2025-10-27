@@ -12,8 +12,26 @@ export default function PlaylistList({ playlists = [], onTileClick = () => {} })
 
       <div className="playlist-grid">
         {playlists.map((pl) => (
-          <div key={pl.id} className="playlist-tile" onClick={() => onTileClick(pl.id)} role="button" tabIndex={0}>
-            <img src={pl.images?.[0]?.url || placeholder} alt={pl.name} className="playlist-image" />
+          <div
+            key={pl.id}
+            className="playlist-tile"
+            onClick={() => onTileClick(pl.id)}
+            role="button"
+            tabIndex={0}
+            title={pl.name}
+          >
+            <div style={{ position: "relative" }}>
+              <img src={pl.images?.[0]?.url || placeholder} alt={pl.name} className="playlist-image" />
+              {pl.isLiked && (
+                <div style={{
+                  position: "absolute", right: 8, top: 8,
+                  background: "rgba(0,0,0,0.5)", padding: 6, borderRadius: 20
+                }}>
+                  <i className="fa-solid fa-heart" style={{ color: "#1ed760" }} />
+                </div>
+              )}
+            </div>
+
             <div className="playlist-info">
               <strong className="truncate">{pl.name}</strong>
               <div className="meta">{pl.tracks?.total ?? 0} Songs</div>

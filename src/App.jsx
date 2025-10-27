@@ -63,19 +63,47 @@ export default function App() {
     }
   }, [token]);
 
-  // Playlists load (unchanged)
+  // Playlists
   useEffect(() => {
-    if (token) {
-      axios
-        .get("https://api.spotify.com/v1/me/playlists", {
+    if (!token) return;
+
+    const loadPlaylists = async () => {
+      try {
+        const res = await axios.get("https://api.spotify.com/v1/me/playlists", {
           headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => setPlaylists(res.data.items || []))
-        .catch((err) => console.error(err));
-    }
+        });
+        const items = res.data.items || [];
+
+        // fetch total saved tracks (Lieblingssongs) to show as a virtual playlist
+        let likedTotal = 0;
+        try {
+          const likedRes = await axios.get("https://api.spotify.com/v1/me/tracks?limit=1", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          likedTotal = likedRes.data.total || 0;
+        } catch (e) {
+          console.warn("Konnte Saved Tracks count nicht holen", e?.message || e);
+        }
+
+        const likedObj = {
+          id: "liked",
+          name: "Lieblingssongs",
+          images: [], // optional: set an image url
+          tracks: { total: likedTotal },
+          isLiked: true,
+        };
+
+        // put liked playlist first so it appears in PlaylistList
+        setPlaylists([likedObj, ...items]);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    loadPlaylists();
   }, [token]);
 
-  // Tracks (vollständige Pagination pro Playlist)
+  // Tracks (vollständige Pagination pro Playlist) — unterstützt jetzt auch "liked"
   useEffect(() => {
     if (!token || playlists.length === 0) {
       setTracks([]);
@@ -83,21 +111,26 @@ export default function App() {
     }
 
     const fetchAllForPlaylist = async (playlistId, playlistName) => {
-      let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+      // special case for saved tracks (liked)
+      let url = playlistId === "liked"
+        ? `https://api.spotify.com/v1/me/tracks?limit=100`
+        : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
       const items = [];
       try {
         while (url) {
           const res = await axios.get(url, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          // annotate each returned item with playlist metadata (so we know source)
-          const chunkItems = (res.data.items || []).map((it) => ({ ...it, _playlistName: playlistName, _playlistId: playlistId }));
-          items.push(...chunkItems);
+          // annotate each item with playlist meta so we know source
+          const chunk = (res.data.items || []).map((it) => ({ ...it, _playlistName: playlistName, _playlistId: playlistId }));
+          items.push(...chunk);
           url = res.data.next;
         }
       } catch (err) {
         console.error("Fehler beim Laden von Tracks für Playlist:", playlistId, err?.response?.data || err.message);
       }
+      // update progress for UI
       setProgress((p) => ({ ...p, current: p.current + 1 }));
       return items;
     };
@@ -108,11 +141,9 @@ export default function App() {
         setLoadingMessage("Lade Tracks aus Playlists...");
         setProgress({ current: 0, total: playlists.length });
 
-        // Start fetching for every playlist and annotate with playlist.name
         const promises = playlists.map((pl) => fetchAllForPlaylist(pl.id, pl.name));
         const allResults = await Promise.all(promises);
-        const flattened = allResults.flat();
-        setTracks(flattened);
+        setTracks(allResults.flat());
         setLoadingMessage("Tracks geladen — erzeuge Genre-/Jahr‑Gruppen...");
       } catch (err) {
         console.error(err);
