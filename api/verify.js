@@ -25,4 +25,4 @@ module.exports = async (req, res) => {
   if (sig !== expected || ageMs > maxAgeMs) return res.status(401).json({ ok: false });
 
   return res.json({ ok: true });
-};
+}; 
