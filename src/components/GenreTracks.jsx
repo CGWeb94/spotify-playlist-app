@@ -99,7 +99,17 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
               <img src={track.album?.images?.[2]?.url || placeholder} alt="" className="track-thumb" />
               <div className="track-meta">
                 <div className="track-title">{track.name}</div>
-                <div className="track-sub">{(track.artists || []).map(a => a.name).join(", ")} • {track.album?.release_date?.split("-")[0] || "?"}</div>
+                <div className="track-sub">
+                  {(track.artists || []).map(a => a.name).join(", ")} • {track.album?.release_date?.split("-")[0] || "?"}
+                  {/* Quellen anzeigen */}
+                  {track.sources && track.sources.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      {track.sources.map((s, i) => (
+                        <span key={i} className="source-chip">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ marginLeft: "auto" }}>
                 <input type="checkbox" checked={!!(checkedMap && checkedMap[id])} onChange={() => toggle(id)} />

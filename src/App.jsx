@@ -75,114 +75,111 @@ export default function App() {
     }
   }, [token]);
 
-  // Tracks per playlist (unchanged)
+  // Tracks (vollständige Pagination pro Playlist)
   useEffect(() => {
-    if (token && playlists.length > 0) {
-      setLoading(true);
-      setLoadingMessage("Lade Tracks aus Playlists...");
-      setProgress({ current: 0, total: playlists.length });
-
-      const fetchAllForPlaylist = async (playlistId) => {
-        let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
-        const items = [];
-        try {
-          while (url) {
-            const res = await axios.get(url, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            items.push(...(res.data.items || []));
-            url = res.data.next;
-          }
-        } catch (err) {
-          console.error("Fehler beim Laden von Tracks für Playlist:", playlistId, err?.response?.data || err.message);
-        }
-        setProgress((p) => ({ ...p, current: p.current + 1 }));
-        return items;
-      };
-
-      const fetchTracks = async () => {
-        try {
-          const promises = playlists.map((pl) => fetchAllForPlaylist(pl.id));
-          const allResults = await Promise.all(promises);
-          setTracks(allResults.flat());
-          setLoadingMessage("Tracks geladen — erzeuge Genre-/Jahr‑Gruppen...");
-        } catch (err) {
-          console.error(err);
-          setLoading(false);
-          setLoadingMessage("");
-        }
-      };
-
-      fetchTracks();
-    } else if (playlists.length === 0) {
+    if (!token || playlists.length === 0) {
       setTracks([]);
-      setLoading(false);
-      setLoadingMessage("");
-      setProgress({ current: 0, total: 0 });
+      return;
     }
+
+    const fetchAllForPlaylist = async (playlistId, playlistName) => {
+      let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+      const items = [];
+      try {
+        while (url) {
+          const res = await axios.get(url, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          // annotate each returned item with playlist metadata (so we know source)
+          const chunkItems = (res.data.items || []).map((it) => ({ ...it, _playlistName: playlistName, _playlistId: playlistId }));
+          items.push(...chunkItems);
+          url = res.data.next;
+        }
+      } catch (err) {
+        console.error("Fehler beim Laden von Tracks für Playlist:", playlistId, err?.response?.data || err.message);
+      }
+      setProgress((p) => ({ ...p, current: p.current + 1 }));
+      return items;
+    };
+
+    const fetchTracks = async () => {
+      try {
+        setLoading(true);
+        setLoadingMessage("Lade Tracks aus Playlists...");
+        setProgress({ current: 0, total: playlists.length });
+
+        // Start fetching for every playlist and annotate with playlist.name
+        const promises = playlists.map((pl) => fetchAllForPlaylist(pl.id, pl.name));
+        const allResults = await Promise.all(promises);
+        const flattened = allResults.flat();
+        setTracks(flattened);
+        setLoadingMessage("Tracks geladen — erzeuge Genre-/Jahr‑Gruppen...");
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+        setLoadingMessage("");
+      }
+    };
+
+    fetchTracks();
   }, [token, playlists]);
 
-  // Genre build (unchanged logic) -> setGenreGroups(...)
+  // Genre-Gruppierung (Artist -> genres), jetzt mit Quellenangaben
   useEffect(() => {
     if (!token || tracks.length === 0) {
       setGenreGroups([]);
       return;
     }
-
-    const buildGenres = async () => {
+    const build = async () => {
       try {
         setLoading(true);
         setLoadingMessage("Hole Künstlerdaten und gruppiere nach Genre...");
         const artistIds = new Set();
-        tracks.forEach((t) => {
-          const track = t.track;
+        tracks.forEach((item) => {
+          const track = item.track;
           if (!track || !track.artists) return;
           track.artists.forEach((a) => artistIds.add(a.id));
         });
         const ids = Array.from(artistIds).filter(Boolean);
-
         const chunks = [];
         for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
-        setProgress({ current: 0, total: chunks.length });
-
-        const artistMap = new Map();
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          try {
-            const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            (res.data.artists || []).forEach((a) => artistMap.set(a.id, a));
-          } catch (err) {
-            console.error("Fehler beim Laden von Künstlern (Chunk)", err?.response?.data || err.message);
-          }
-          setProgress((p) => ({ ...p, current: p.current + 1 }));
+        const artistResponses = [];
+        for (const chunk of chunks) {
+          const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          artistResponses.push(res);
         }
 
+        const artistMap = new Map();
+        artistResponses.forEach((r) => (r.data.artists || []).forEach((a) => artistMap.set(a.id, a)));
+
+        // genreMap: genre -> { image, tracks: Map<trackId, { track: <trackObj>, sources: Set } > }
         const genreMap = new Map();
-        tracks.forEach((t) => {
-          const track = t.track;
+        tracks.forEach((item) => {
+          const track = item.track;
           if (!track) return;
           const trackId = track.id;
+          const playlistName = item._playlistName || "Unbekannt";
           track.artists.forEach((a) => {
             const artist = artistMap.get(a.id);
-            if (!artist || !artist.genres || artist.genres.length === 0) {
-              const g = "Unbekannt";
+            const genres = (artist && artist.genres && artist.genres.length) ? artist.genres : ["Unbekannt"];
+            genres.forEach((g) => {
               if (!genreMap.has(g)) genreMap.set(g, { image: artist?.images?.[0]?.url || null, tracks: new Map() });
-              genreMap.get(g).tracks.set(trackId, track);
-            } else {
-              artist.genres.forEach((g) => {
-                if (!genreMap.has(g)) genreMap.set(g, { image: artist.images?.[0]?.url || null, tracks: new Map() });
-                genreMap.get(g).tracks.set(trackId, track);
-              });
-            }
+              const entry = genreMap.get(g).tracks;
+              if (!entry.has(trackId)) {
+                entry.set(trackId, { track: track, sources: new Set([playlistName]) });
+              } else {
+                entry.get(trackId).sources.add(playlistName);
+              }
+            });
           });
         });
 
         const groups = Array.from(genreMap.entries()).map(([genre, data]) => ({
           genre,
           image: data.image,
-          tracks: Array.from(data.tracks.values()),
+          tracks: Array.from(data.tracks.values()).map((v) => ({ ...v.track, sources: Array.from(v.sources) })),
         }));
         groups.sort((a, b) => b.tracks.length - a.tracks.length);
         setGenreGroups(groups);
@@ -194,11 +191,10 @@ export default function App() {
         setProgress({ current: 0, total: 0 });
       }
     };
-
-    buildGenres();
+    build();
   }, [token, tracks]);
 
-  // Year groups (unchanged) -> setAddedYearGroups, setReleasedYearGroups
+  // Year groups: added_at (when you added to playlists) & release year — jetzt mit Quellen
   useEffect(() => {
     if (!tracks || tracks.length === 0) {
       setAddedYearGroups([]);
@@ -212,30 +208,39 @@ export default function App() {
       const track = item.track;
       if (!track) return;
       const id = track.id;
+      const playlistName = item._playlistName || "Unbekannt";
+
+      // added_at -> year (some playlist items include added_at)
       const addedAt = item.added_at;
       if (addedAt) {
         const y = new Date(addedAt).getFullYear();
         if (!addedMap.has(y)) addedMap.set(y, { image: track.album?.images?.[0]?.url || null, tracks: new Map() });
-        addedMap.get(y).tracks.set(id, track);
+        const mapEntry = addedMap.get(y).tracks;
+        if (!mapEntry.has(id)) mapEntry.set(id, { track: track, sources: new Set([playlistName]) });
+        else mapEntry.get(id).sources.add(playlistName);
       }
+
+      // release year
       const rel = track.album?.release_date || "";
       const relYear = rel.split("-")[0];
       if (relYear) {
         if (!releasedMap.has(relYear)) releasedMap.set(relYear, { image: track.album?.images?.[0]?.url || null, tracks: new Map() });
-        releasedMap.get(relYear).tracks.set(id, track);
+        const mapEntry = releasedMap.get(relYear).tracks;
+        if (!mapEntry.has(id)) mapEntry.set(id, { track: track, sources: new Set([playlistName]) });
+        else mapEntry.get(id).sources.add(playlistName);
       }
     });
 
     const addedGroups = Array.from(addedMap.entries()).map(([year, data]) => ({
       title: String(year),
       image: data.image,
-      tracks: Array.from(data.tracks.values()),
+      tracks: Array.from(data.tracks.values()).map((v) => ({ ...v.track, sources: Array.from(v.sources) })),
     })).sort((a,b) => b.title - a.title);
 
     const releasedGroups = Array.from(releasedMap.entries()).map(([year, data]) => ({
       title: String(year),
       image: data.image,
-      tracks: Array.from(data.tracks.values()),
+      tracks: Array.from(data.tracks.values()).map((v) => ({ ...v.track, sources: Array.from(v.sources) })),
     })).sort((a,b) => b.title - a.title);
 
     setAddedYearGroups(addedGroups);
