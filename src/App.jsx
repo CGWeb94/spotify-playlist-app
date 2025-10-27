@@ -1,11 +1,12 @@
 // src/App.jsx
 import { useState, useEffect } from "react";
+import axios from "axios";
 import LoginButton from "./components/LoginButton";
 import PlaylistList from "./components/PlaylistList";
-import TrackList from "./components/TrackList";
-import axios from "axios";
 import GenreGrid from "./components/GenreGrid";
 import GenreTracks from "./components/GenreTracks";
+import YearGrid from "./components/YearGrid";
+import Sidebar from "./components/Sidebar";
 import "./App.css";
 
 export default function App() {
@@ -14,6 +15,10 @@ export default function App() {
   const [tracks, setTracks] = useState([]);
   const [genreGroups, setGenreGroups] = useState([]); // { genre, image, tracks: [] }
   const [selectedGenre, setSelectedGenre] = useState(null);
+
+  const [addedYearGroups, setAddedYearGroups] = useState([]);
+  const [releasedYearGroups, setReleasedYearGroups] = useState([]);
+  const [selectedYearGroup, setSelectedYearGroup] = useState(null);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -158,45 +163,127 @@ export default function App() {
     buildGenres();
   }, [token, tracks]);
 
-  // Accordion state
-  const [openPlaylists, setOpenPlaylists] = useState(false);
-  const [openGenres, setOpenGenres] = useState(false);
+  // 🔹 Year groups: added_at (when you added to playlists) & release year
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) {
+      setAddedYearGroups([]);
+      setReleasedYearGroups([]);
+      return;
+    }
+    const addedMap = new Map();
+    const releasedMap = new Map();
+
+    tracks.forEach((item) => {
+      const track = item.track;
+      if (!track) return;
+      const id = track.id;
+      // added_at -> year (some playlist items include added_at)
+      const addedAt = item.added_at;
+      if (addedAt) {
+        const y = new Date(addedAt).getFullYear();
+        if (!addedMap.has(y)) addedMap.set(y, { image: track.album?.images?.[0]?.url || null, tracks: new Map() });
+        addedMap.get(y).tracks.set(id, track);
+      }
+      // release year
+      const rel = track.album?.release_date || "";
+      const relYear = rel.split("-")[0];
+      if (relYear) {
+        if (!releasedMap.has(relYear)) releasedMap.set(relYear, { image: track.album?.images?.[0]?.url || null, tracks: new Map() });
+        releasedMap.get(relYear).tracks.set(id, track);
+      }
+    });
+
+    const addedGroups = Array.from(addedMap.entries()).map(([year, data]) => ({
+      title: String(year),
+      image: data.image,
+      tracks: Array.from(data.tracks.values()),
+    })).sort((a,b) => b.title - a.title);
+
+    const releasedGroups = Array.from(releasedMap.entries()).map(([year, data]) => ({
+      title: String(year),
+      image: data.image,
+      tracks: Array.from(data.tracks.values()),
+    })).sort((a,b) => b.title - a.title);
+
+    setAddedYearGroups(addedGroups);
+    setReleasedYearGroups(releasedGroups);
+  }, [tracks]);
+
+  // New: UI state for sidebar
+  const [section, setSection] = useState("home"); // home | playlists | genres | added | released
+
+  // smooth scroll handler for playlist tiles -> list item
+  const scrollToPlaylist = (id) => {
+    const el = document.getElementById(`pl-list-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // optional focus for accessibility
+      el.focus?.();
+    }
+  };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div className="app-layout container-fluid">
       {!token ? (
-        <LoginButton />
+        <div className="row justify-content-center mt-5">
+          <div className="col-auto">
+            <LoginButton />
+          </div>
+        </div>
       ) : (
-        <div>
-          <div className="accordion">
-            <button className="accordion-toggle" onClick={() => setOpenPlaylists((s) => !s)}>
-              Deine Playlists ({playlists.length}) {openPlaylists ? "▾" : "▸"}
-            </button>
-            {openPlaylists && (
-              <div className="accordion-panel">
-                <PlaylistList playlists={playlists} />
-              </div>
-            )}
+        <div className="row">
+          <div className="col-auto">
+            <Sidebar
+              selected={section}
+              onSelect={(s) => setSection(s)}
+              counts={{
+                playlists: playlists.length,
+                genres: genreGroups.length,
+                addedYears: addedYearGroups.length,
+                releasedYears: releasedYearGroups.length,
+              }}
+            />
           </div>
 
-          <div className="accordion" style={{ marginTop: 16 }}>
-            <button className="accordion-toggle" onClick={() => setOpenGenres((s) => !s)}>
-              Genres ({genreGroups.length}) {openGenres ? "▾" : "▸"}
-            </button>
-            {openGenres && (
-              <div className="accordion-panel">
+          <main className="col content-area">
+            {section === "home" && (
+              <div>
+                <h2>Willkommen</h2>
+                <p>Wähle links eine Kategorie, um Inhalte anzuzeigen.</p>
+              </div>
+            )}
+
+            {section === "playlists" && (
+              <div>
+                <h2>Deine Playlists</h2>
+                <PlaylistList playlists={playlists} onTileClick={scrollToPlaylist} />
+              </div>
+            )}
+
+            {section === "genres" && (
+              <div>
+                <h2>Playlists nach Genre</h2>
                 <GenreGrid groups={genreGroups} onSelect={(g) => setSelectedGenre(g)} />
               </div>
             )}
-          </div>
 
-          {selectedGenre && (
-            <div style={{ marginTop: 16 }}>
-              <GenreTracks group={selectedGenre} onClose={() => setSelectedGenre(null)} />
-            </div>
-          )}
+            {section === "added" && (
+              <div>
+                <h2>Nach Jahr hinzugefügt</h2>
+                <YearGrid groups={addedYearGroups} onSelect={(g) => setSelectedYearGroup(g)} />
+              </div>
+            )}
 
-          {/* rohe Songs ausgeblendet nach Wunsch */}
+            {section === "released" && (
+              <div>
+                <h2>Nach Jahr erschienen</h2>
+                <YearGrid groups={releasedYearGroups} onSelect={(g) => setSelectedYearGroup(g)} />
+              </div>
+            )}
+
+            {selectedGenre && <div style={{ marginTop: 16 }}><GenreTracks group={selectedGenre} onClose={() => setSelectedGenre(null)} /></div>}
+            {selectedYearGroup && <div style={{ marginTop: 16 }}><GenreTracks group={selectedYearGroup} onClose={() => setSelectedYearGroup(null)} /></div>}
+          </main>
         </div>
       )}
     </div>

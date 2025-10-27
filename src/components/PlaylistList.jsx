@@ -1,15 +1,19 @@
-export default function PlaylistList({ playlists = [] }) {
+import React from "react";
+
+export default function PlaylistList({ playlists = [], onTileClick = () => {} }) {
   const placeholder = "https://via.placeholder.com/300?text=No+Image";
   return (
     <div>
+      {/* Legend */}
+      <div className="legend p-2 mb-3 rounded">
+        <div><i className="fa-solid fa-image me-2"></i><strong>Cover</strong></div>
+        <div className="ms-3">Kachel: klick = zur Listenansicht scrollen</div>
+      </div>
+
       <div className="playlist-grid">
         {playlists.map((pl) => (
-          <div key={pl.id} className="playlist-tile">
-            <img
-              src={pl.images?.[0]?.url || placeholder}
-              alt={pl.name}
-              className="playlist-image"
-            />
+          <div key={pl.id} className="playlist-tile" onClick={() => onTileClick(pl.id)} role="button" tabIndex={0}>
+            <img src={pl.images?.[0]?.url || placeholder} alt={pl.name} className="playlist-image" />
             <div className="playlist-info">
               <strong className="truncate">{pl.name}</strong>
               <div className="meta">{pl.tracks?.total ?? 0} Songs</div>
@@ -20,7 +24,7 @@ export default function PlaylistList({ playlists = [] }) {
 
       <div style={{ marginTop: 12 }}>
         {playlists.map((pl) => (
-          <div key={`list-${pl.id}`} style={{ padding: 6, borderBottom: "1px solid #eee", textAlign: "left" }}>
+          <div id={`pl-list-${pl.id}`} key={`list-${pl.id}`} tabIndex={-1} style={{ padding: 6, borderBottom: "1px solid #eee", textAlign: "left" }}>
             <strong>{pl.name}</strong> — {pl.tracks?.total ?? 0} tracks
           </div>
         ))}
