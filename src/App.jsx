@@ -13,25 +13,25 @@ export default function App() {
   const [token, setToken] = useState("");
   const [playlists, setPlaylists] = useState([]);
   const [tracks, setTracks] = useState([]);
-  const [genreGroups, setGenreGroups] = useState([]); // { genre, image, tracks: [] }
-  const [selectedGenre, setSelectedGenre] = useState(null);
-
+  const [genreGroups, setGenreGroups] = useState([]);
   const [addedYearGroups, setAddedYearGroups] = useState([]);
   const [releasedYearGroups, setReleasedYearGroups] = useState([]);
-  const [selectedYearGroup, setSelectedYearGroup] = useState(null);
+
+  // single selected detail (ensures only one list view visible)
+  // { kind: "genre"|"year", source: "added"|"released"?, group: {...} } or null
+  const [selectedDetail, setSelectedDetail] = useState(null);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-  // New: loading / progress state
+  // loading/progress state (kept from previous)
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
-  const [progress, setProgress] = useState({ current: 0, total: 0 }); // for playlists / artists
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
-  // 🔹 Authorization Code aus URL holen & Access Token vom Backend abrufen
+  // Auth -> token (unchanged)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-
     if (code && !token) {
       axios
         .post(`${BACKEND_URL}/auth/token`, { code })
@@ -43,7 +43,7 @@ export default function App() {
     }
   }, [token]);
 
-  // 🔹 Playlists laden
+  // Playlists load (unchanged)
   useEffect(() => {
     if (token) {
       axios
@@ -55,7 +55,7 @@ export default function App() {
     }
   }, [token]);
 
-  // 🔹 Tracks aus allen Playlists laden (vollständig mit Pagination pro Playlist)
+  // Tracks per playlist (unchanged)
   useEffect(() => {
     if (token && playlists.length > 0) {
       setLoading(true);
@@ -71,25 +71,21 @@ export default function App() {
               headers: { Authorization: `Bearer ${token}` },
             });
             items.push(...(res.data.items || []));
-            url = res.data.next; // Spotify liefert vollständige URL für next
+            url = res.data.next;
           }
         } catch (err) {
           console.error("Fehler beim Laden von Tracks für Playlist:", playlistId, err?.response?.data || err.message);
         }
-        // update playlist progress
         setProgress((p) => ({ ...p, current: p.current + 1 }));
         return items;
       };
 
       const fetchTracks = async () => {
         try {
-          // parallel starten, aber Fortschritt wird nach Abschluss jeder Playlist aktualisiert
           const promises = playlists.map((pl) => fetchAllForPlaylist(pl.id));
           const allResults = await Promise.all(promises);
-          const flattened = allResults.flat();
-          setTracks(flattened);
+          setTracks(allResults.flat());
           setLoadingMessage("Tracks geladen — erzeuge Genre-/Jahr‑Gruppen...");
-          // keep loading on until genre/year groups are built
         } catch (err) {
           console.error(err);
           setLoading(false);
@@ -106,7 +102,7 @@ export default function App() {
     }
   }, [token, playlists]);
 
-  // 🔹 Genre-Gruppierung: Artists holen, Genres zuordnen
+  // Genre build (unchanged logic) -> setGenreGroups(...)
   useEffect(() => {
     if (!token || tracks.length === 0) {
       setGenreGroups([]);
@@ -117,7 +113,6 @@ export default function App() {
       try {
         setLoading(true);
         setLoadingMessage("Hole Künstlerdaten und gruppiere nach Genre...");
-        // Alle Artist-IDs sammeln (unique)
         const artistIds = new Set();
         tracks.forEach((t) => {
           const track = t.track;
@@ -125,16 +120,11 @@ export default function App() {
           track.artists.forEach((a) => artistIds.add(a.id));
         });
         const ids = Array.from(artistIds).filter(Boolean);
-        // Spotify artist endpoint erlaubt max 50 ids
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 50) {
-          chunks.push(ids.slice(i, i + 50));
-        }
 
-        // show artist progress
+        const chunks = [];
+        for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
         setProgress({ current: 0, total: chunks.length });
 
-        // fetch artist chunks sequentially to allow progress updates (avoids burst & gives UX feedback)
         const artistMap = new Map();
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
@@ -150,7 +140,6 @@ export default function App() {
         }
 
         const genreMap = new Map();
-
         tracks.forEach((t) => {
           const track = t.track;
           if (!track) return;
@@ -175,9 +164,7 @@ export default function App() {
           image: data.image,
           tracks: Array.from(data.tracks.values()),
         }));
-
         groups.sort((a, b) => b.tracks.length - a.tracks.length);
-
         setGenreGroups(groups);
       } catch (err) {
         console.error(err);
@@ -191,7 +178,7 @@ export default function App() {
     buildGenres();
   }, [token, tracks]);
 
-  // Year groups: added_at (when you added to playlists) & release year
+  // Year groups (unchanged) -> setAddedYearGroups, setReleasedYearGroups
   useEffect(() => {
     if (!tracks || tracks.length === 0) {
       setAddedYearGroups([]);
@@ -205,14 +192,12 @@ export default function App() {
       const track = item.track;
       if (!track) return;
       const id = track.id;
-      // added_at -> year (some playlist items include added_at)
       const addedAt = item.added_at;
       if (addedAt) {
         const y = new Date(addedAt).getFullYear();
         if (!addedMap.has(y)) addedMap.set(y, { image: track.album?.images?.[0]?.url || null, tracks: new Map() });
         addedMap.get(y).tracks.set(id, track);
       }
-      // release year
       const rel = track.album?.release_date || "";
       const relYear = rel.split("-")[0];
       if (relYear) {
@@ -237,17 +222,37 @@ export default function App() {
     setReleasedYearGroups(releasedGroups);
   }, [tracks]);
 
-  // New: UI state for sidebar
-  const [section, setSection] = useState("home"); // home | playlists | genres | added | released
-
-  // smooth scroll handler for playlist tiles -> list item
+  // smooth scroll handler for playlist tiles -> list item (unchanged)
   const scrollToPlaylist = (id) => {
+    // hide any detail when jumping to playlist lists
+    setSelectedDetail(null);
     const el = document.getElementById(`pl-list-${id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      // optional focus for accessibility
-      el.focus?.();
-    }
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // Sidebar selection -> clear any open detail view
+  const [section, setSection] = useState("home"); // home | playlists | genres | added | released
+  useEffect(() => {
+    setSelectedDetail(null);
+  }, [section]);
+
+  // when a detail is set, scroll to its panel
+  useEffect(() => {
+    if (!selectedDetail) return;
+    // small timeout to allow render
+    setTimeout(() => {
+      const el = document.getElementById("detail-panel");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, [selectedDetail]);
+
+  // Handlers to open detail views and ensure only one visible
+  const openGenreDetail = (group) => {
+    setSelectedDetail({ kind: "genre", group });
+  };
+  const openYearDetail = (source, group) => {
+    // source = "added" | "released"
+    setSelectedDetail({ kind: "year", source, group });
   };
 
   return (
@@ -276,41 +281,49 @@ export default function App() {
           <main className="col content-area">
             {section === "home" && (
               <div>
-                <h2>Willkommen</h2>
-                <p>Wähle links eine Kategorie, um Inhalte anzuzeigen.</p>
+                <h2 style={{ color: "var(--text-main)" }}>Willkommen</h2>
+                <p style={{ color: "var(--text-sub)" }}>Wähle links eine Kategorie, um Inhalte anzuzeigen.</p>
               </div>
             )}
 
             {section === "playlists" && (
               <div>
-                <h2>Deine Playlists</h2>
+                <h2 style={{ color: "var(--text-main)" }}>Deine Playlists</h2>
                 <PlaylistList playlists={playlists} onTileClick={scrollToPlaylist} />
               </div>
             )}
 
             {section === "genres" && (
               <div>
-                <h2>Playlists nach Genre</h2>
-                <GenreGrid groups={genreGroups} onSelect={(g) => setSelectedGenre(g)} />
+                <h2 style={{ color: "var(--text-main)" }}>Playlists nach Genre</h2>
+                <GenreGrid groups={genreGroups} onSelect={(g) => openGenreDetail(g)} />
               </div>
             )}
 
             {section === "added" && (
               <div>
-                <h2>Nach Jahr hinzugefügt</h2>
-                <YearGrid groups={addedYearGroups} onSelect={(g) => setSelectedYearGroup(g)} />
+                <h2 style={{ color: "var(--text-main)" }}>Nach Jahr hinzugefügt</h2>
+                <YearGrid groups={addedYearGroups} onSelect={(g) => openYearDetail("added", g)} />
               </div>
             )}
 
             {section === "released" && (
               <div>
-                <h2>Nach Jahr erschienen</h2>
-                <YearGrid groups={releasedYearGroups} onSelect={(g) => setSelectedYearGroup(g)} />
+                <h2 style={{ color: "var(--text-main)" }}>Nach Jahr erschienen</h2>
+                <YearGrid groups={releasedYearGroups} onSelect={(g) => openYearDetail("released", g)} />
               </div>
             )}
 
-            {selectedGenre && <div style={{ marginTop: 16 }}><GenreTracks group={selectedGenre} onClose={() => setSelectedGenre(null)} /></div>}
-            {selectedYearGroup && <div style={{ marginTop: 16 }}><GenreTracks group={selectedYearGroup} onClose={() => setSelectedYearGroup(null)} /></div>}
+            {/* Detail panel: only one visible at a time */}
+            <div id="detail-panel" style={{ marginTop: 18 }}>
+              {selectedDetail && selectedDetail.kind === "genre" && (
+                <GenreTracks group={selectedDetail.group} onClose={() => setSelectedDetail(null)} />
+              )}
+              {selectedDetail && selectedDetail.kind === "year" && (
+                // reuse GenreTracks to display year groups (tracks array available under group.tracks)
+                <GenreTracks group={selectedDetail.group} onClose={() => setSelectedDetail(null)} />
+              )}
+            </div>
           </main>
         </div>
       )}
@@ -319,16 +332,16 @@ export default function App() {
       {loading && (
         <div className="loading-overlay">
           <div className="loading-box">
-            <div className="spinner-border text-primary" role="status" style={{ width: 48, height: 48 }}>
+            <div className="spinner-border text-success" role="status" style={{ width: 48, height: 48 }}>
               <span className="visually-hidden">Loading...</span>
             </div>
-            <div style={{ marginTop: 12, textAlign: "center" }}>
+            <div style={{ marginTop: 12, textAlign: "center", color: "var(--text-main)" }}>
               <div style={{ fontWeight: 600 }}>{loadingMessage}</div>
               {progress.total > 0 && (
                 <div style={{ width: 260, marginTop: 8 }}>
                   <div className="progress" style={{ height: 10 }}>
                     <div
-                      className="progress-bar"
+                      className="progress-bar bg-success"
                       role="progressbar"
                       style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
                       aria-valuenow={progress.current}
@@ -336,7 +349,7 @@ export default function App() {
                       aria-valuemax={progress.total}
                     />
                   </div>
-                  <div style={{ fontSize: 12, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, marginTop: 6, color: "var(--text-sub)" }}>
                     {progress.current} / {progress.total}
                   </div>
                 </div>
