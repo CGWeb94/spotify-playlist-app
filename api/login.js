@@ -1,9 +1,8 @@
-const crypto = require("crypto");
+import crypto from "crypto";
 
-const sign = (val, secret) =>
-  crypto.createHmac("sha256", secret).update(val).digest("hex");
+const sign = (val, secret) => crypto.createHmac("sha256", secret).update(val).digest("hex");
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
 
   // robust body parse
@@ -17,7 +16,6 @@ module.exports = async (req, res) => {
     });
     if (raw) body = JSON.parse(raw);
   } catch (e) {
-    // ignore parse error
     body = {};
   }
 
@@ -25,7 +23,6 @@ module.exports = async (req, res) => {
   const SITE_PASSWORD = process.env.SITE_PASSWORD;
   const SESSION_SECRET = process.env.SESSION_SECRET || "change_this_long_secret";
 
-  // debug logs (no secret values printed)
   console.log("LOGIN DEBUG: SITE_PASSWORD set:", !!SITE_PASSWORD, "SITE_PASSWORD length:", SITE_PASSWORD ? SITE_PASSWORD.length : 0);
   console.log("LOGIN DEBUG: received password length:", inputPassword.length);
 
@@ -34,7 +31,6 @@ module.exports = async (req, res) => {
     return res.status(500).json({ ok: false, message: "Server not configured" });
   }
 
-  // trim both sides to avoid accidental spaces
   const ok = inputPassword.trim() === SITE_PASSWORD.trim();
   console.log("LOGIN DEBUG: password match:", ok);
 
@@ -50,4 +46,4 @@ module.exports = async (req, res) => {
   const cookie = `session=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Lax${secureFlag}`;
   res.setHeader("Set-Cookie", cookie);
   return res.json({ ok: true });
-};
+}
