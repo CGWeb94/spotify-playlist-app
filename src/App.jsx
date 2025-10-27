@@ -172,38 +172,68 @@ export default function App() {
       try {
         setLoading(true);
         setLoadingMessage("Hole Künstlerdaten und gruppiere nach Genre...");
+
         // collect unique artist ids
         const artistIds = new Set();
         tracks.forEach((item) => {
           const tr = item.track || item;
           if (!tr || !tr.artists) return;
-          tr.artists.forEach((a) => artistIds.add(a.id));
+          tr.artists.forEach((a) => a.id && artistIds.add(a.id));
         });
-        const ids = Array.from(artistIds).filter(Boolean);
+        const ids = Array.from(artistIds);
+        if (ids.length === 0) {
+          setGenreGroups([]);
+          setArtistGroups([]);
+          setLoading(false);
+          setLoadingMessage("");
+          return;
+        }
 
         // chunk ids (50 per request)
         const chunks = [];
         for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
 
-        // reset progress counter for artist-chunks (important fix)
-        setProgress({ current: 0, total: chunks.length || 1 });
+        // progress reset
+        setProgress({ current: 0, total: chunks.length });
 
-        const artistMap = new Map();
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
+        // fetch chunks in parallel (allSettled) and retry failed chunks once
+        const fetchChunk = async (chunk) => {
           try {
             const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
               headers: { Authorization: `Bearer ${token}` },
             });
-            (res.data.artists || []).forEach((a) => artistMap.set(a.id, a));
+            return { ok: true, data: res.data.artists || [] };
           } catch (err) {
-            console.error("Fehler beim Laden von Künstlern (Chunk)", err?.response?.data || err.message);
+            return { ok: false, err };
           }
-          // increment progress (now starts at 0)
-          setProgress((p) => ({ ...p, current: (p.current || 0) + 1 }));
-        }
+        };
 
-        // build genre groups (with sources) - same approach as before
+        // first pass
+        const first = await Promise.all(chunks.map((c) => fetchChunk(c)));
+        // retry failed
+        const retryPromises = first.map((r, idx) => (r.ok ? Promise.resolve(r) : fetchChunk(chunks[idx])));
+        const final = await Promise.all(retryPromises);
+
+        // advance progress (count successes)
+        const successCount = final.filter((r) => r.ok).length;
+        setProgress({ current: successCount, total: chunks.length });
+
+        // build artistMap from successes
+        const artistMap = new Map();
+        final.forEach((r) => {
+          if (r.ok && Array.isArray(r.data)) {
+            r.data.forEach((a) => a && a.id && artistMap.set(a.id, a));
+          }
+        });
+
+        // Fallback: if some artist ids missing, create minimal placeholders
+        ids.forEach((aid) => {
+          if (!artistMap.has(aid)) {
+            artistMap.set(aid, { id: aid, name: "Unbekannt", genres: [], images: [] });
+          }
+        });
+
+        // build genre groups
         const genreMap = new Map();
         tracks.forEach((item) => {
           const tr = item.track || item;
@@ -211,8 +241,8 @@ export default function App() {
           const trackId = tr.id;
           const playlistName = item._playlistName || "Unbekannt";
           (tr.artists || []).forEach((a) => {
-            const artist = artistMap.get(a.id);
-            const genres = (artist && artist.genres && artist.genres.length) ? artist.genres : ["Unbekannt"];
+            const artist = artistMap.get(a.id) || { genres: [], images: [] };
+            const genres = (artist.genres && artist.genres.length) ? artist.genres : ["Unbekannt"];
             genres.forEach((g) => {
               if (!genreMap.has(g)) genreMap.set(g, { image: artist?.images?.[0]?.url || null, tracks: new Map() });
               const entry = genreMap.get(g).tracks;
@@ -229,7 +259,7 @@ export default function App() {
         })).sort((a, b) => b.tracks.length - a.tracks.length);
         setGenreGroups(groups);
 
-        // build artist groups: for each artist in artistMap, collect tracks where they appear
+        // build artist groups
         const ag = [];
         for (const [aid, artist] of artistMap.entries()) {
           const artistTracks = [];
@@ -239,27 +269,34 @@ export default function App() {
             const hasArtist = (tr.artists || []).some((a) => a.id === aid);
             if (hasArtist) {
               const playlistName = item._playlistName || "Unbekannt";
-              // attach sources if not present
               const tcopy = { ...tr };
               tcopy.sources = tcopy.sources || [];
               if (!tcopy.sources.includes(playlistName)) tcopy.sources.push(playlistName);
               artistTracks.push(tcopy);
             }
           });
-          if (artistTracks.length) {
-            ag.push({ id: aid, name: artist.name, image: artist.images?.[0]?.url || null, tracks: artistTracks });
-          }
+          if (artistTracks.length) ag.push({ id: aid, name: artist.name || "Unbekannt", image: artist.images?.[0]?.url || null, tracks: artistTracks });
         }
-        // sort by number of tracks
         ag.sort((a, b) => b.tracks.length - a.tracks.length);
         setArtistGroups(ag);
       } catch (err) {
-        console.error(err);
+        console.error("Genre/Artist build error:", err?.response?.data || err.message || err);
+        // detect /me/tracks permission problems or token issues
+        const respData = err?.response?.data;
+        if (respData && respData.error) {
+          const msg = respData.error.message || JSON.stringify(respData.error);
+          if (msg.toLowerCase().includes("scope") || err?.response?.status === 401 || err?.response?.status === 403) {
+            setLoadingMessage("Fehler: fehlende Berechtigung für Saved Tracks. Bitte erneut mit Scope user-library-read einloggen.");
+          } else {
+            setLoadingMessage(`Fehler beim Gruppieren: ${msg}`);
+          }
+        } else {
+          setLoadingMessage("Fehler beim Gruppieren (siehe Konsole).");
+        }
       } finally {
-        // done
         setLoading(false);
-        setLoadingMessage("");
-        setProgress({ current: 0, total: 0 });
+        // clear progress after short delay so user sees 100%
+        setTimeout(() => setProgress({ current: 0, total: 0 }), 400);
       }
     };
 
