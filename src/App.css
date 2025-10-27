@@ -153,3 +153,68 @@ body {
 /* progress bar customization */
 .progress-bar.bg-success { background-color: var(--spotify-green) !important; }
 .spinner-border.text-success { color: var(--spotify-green) !important; }
+
+/* floating create button (bottom center) */
+.floating-create {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  z-index: 999;
+}
+.create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 28px;
+  background: linear-gradient(90deg, rgba(30,215,96,0.14), rgba(30,215,96,0.06));
+  border: 1px solid rgba(30,215,96,0.18);
+  color: var(--text-main);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(30,215,96,0.06);
+}
+.create-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.modal-box {
+  width: 420px;
+  background: linear-gradient(180deg, #121212, #181818);
+  padding: 18px;
+  border-radius: 10px;
+  color: var(--text-main);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+}
+.modal-box h4 { margin: 0 0 8px 0; }
+.modal-box label { display: block; margin-top: 8px; color: var(--text-sub); }
+.modal-box input { width: 100%; padding: 8px; margin-top: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); background: rgba(0,0,0,0.25); color: var(--text-main); }
+
+/* back to top button (circular) */
+.back-top {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 8px solid transparent;
+  background: radial-gradient(circle at center, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.6) 100%);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  z-index: 9999;
+  cursor: pointer;
+}
+.back-top i { color: var(--spotify-green); font-size: 16px; }
+/* the conic-gradient inline style used in App.jsx paints the progress border */

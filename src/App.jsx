@@ -10,6 +10,7 @@ import Sidebar from "./components/Sidebar";
 import "./App.css";
 
 export default function App() {
+  // auth & data state (kept)
   const [token, setToken] = useState("");
   const [playlists, setPlaylists] = useState([]);
   const [tracks, setTracks] = useState([]);
@@ -21,13 +22,32 @@ export default function App() {
   // { kind: "genre"|"year", source: "added"|"released"?, group: {...} } or null
   const [selectedDetail, setSelectedDetail] = useState(null);
 
+  // lifted checkedMap for the active detail view so App can use it
+  const [checkedMap, setCheckedMap] = useState({});
+
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-  // loading/progress state (kept from previous)
+  // loading/progress state
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
+  // UI / sidebar
+  const [section, setSection] = useState("home"); // home | playlists | genres | added | released
+
+  // modal state for create playlist
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createPublic, setCreatePublic] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createResult, setCreateResult] = useState(null);
+
+  // scroll progress for back-to-top
+  const [scrollPct, setScrollPct] = useState(0);
+
+  // --- auth, playlists, tracks, groups effects (kept same as before) ---
+  // put here your existing effects for auth, playlists, tracks pagination, buildGenres, build years...
   // Auth -> token (unchanged)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -222,38 +242,127 @@ export default function App() {
     setReleasedYearGroups(releasedGroups);
   }, [tracks]);
 
-  // smooth scroll handler for playlist tiles -> list item (unchanged)
-  const scrollToPlaylist = (id) => {
-    // hide any detail when jumping to playlist lists
-    setSelectedDetail(null);
-    const el = document.getElementById(`pl-list-${id}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  // Sidebar selection -> clear any open detail view
-  const [section, setSection] = useState("home"); // home | playlists | genres | added | released
+  // when sidebar section changes, close detail
   useEffect(() => {
     setSelectedDetail(null);
   }, [section]);
 
-  // when a detail is set, scroll to its panel
+  // when opening a detail, initialize checkedMap and scroll to detail panel
   useEffect(() => {
     if (!selectedDetail) return;
-    // small timeout to allow render
+    // initialize checkedMap from group's tracks
+    const initial = {};
+    const arr = selectedDetail.group?.tracks || [];
+    arr.forEach((t) => {
+      const id = t.id || (t.track && t.track.id);
+      initial[id] = true;
+    });
+    setCheckedMap(initial);
+
+    // scroll to detail panel
     setTimeout(() => {
       const el = document.getElementById("detail-panel");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   }, [selectedDetail]);
 
-  // Handlers to open detail views and ensure only one visible
+  // expose handlers to open details (only one visible at a time)
   const openGenreDetail = (group) => {
+    setSection("genres");
     setSelectedDetail({ kind: "genre", group });
   };
   const openYearDetail = (source, group) => {
     // source = "added" | "released"
+    setSection(source === "added" ? "added" : "released");
     setSelectedDetail({ kind: "year", source, group });
   };
+
+  // scroll to playlist list element
+  const scrollToPlaylist = (id) => {
+    setSelectedDetail(null);
+    const el = document.getElementById(`pl-list-${id}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // create playlist flow
+  const handleCreateClick = () => {
+    setCreateName(selectedDetail?.group?.genre ? `${selectedDetail.group.genre}` : "Neue Playlist");
+    setCreateDesc("");
+    setCreatePublic(false);
+    setShowCreateModal(true);
+    setCreateResult(null);
+  };
+
+  const createPlaylistOnSpotify = async () => {
+    if (!token || !selectedDetail) return;
+    setCreating(true);
+    setCreateResult(null);
+    try {
+      // get current user id
+      const me = await axios.get("https://api.spotify.com/v1/me", { headers: { Authorization: `Bearer ${token}` } });
+      const userId = me.data.id;
+
+      // determine selected track URIs from checkedMap
+      const tracksArr = selectedDetail.group.tracks || [];
+      const uris = tracksArr
+        .filter((t) => {
+          const id = t.id || (t.track && t.track.id);
+          return !!checkedMap[id];
+        })
+        .map((t) => `spotify:track:${t.id || (t.track && t.track.id)}`)
+        .filter(Boolean);
+
+      if (uris.length === 0) {
+        setCreateResult({ ok: false, message: "Keine Songs ausgewählt." });
+        setCreating(false);
+        return;
+      }
+
+      // create playlist
+      const plRes = await axios.post(
+        `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists`,
+        { name: createName || "Neue Playlist", public: !!createPublic, description: createDesc || "" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const newPlaylistId = plRes.data.id;
+
+      // add tracks in batches of 100
+      for (let i = 0; i < uris.length; i += 100) {
+        const chunk = uris.slice(i, i + 100);
+        await axios.post(
+          `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+          { uris: chunk },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+
+      setCreateResult({ ok: true, message: `Playlist erstellt (${uris.length} Songs)` });
+    } catch (err) {
+      console.error("Create playlist error", err?.response?.data || err.message);
+      setCreateResult({ ok: false, message: "Fehler beim Erstellen. Siehe Konsole." });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // scroll progress for back-to-top with border progress
+  useEffect(() => {
+    const onScroll = () => {
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      const pos = window.scrollY;
+      const pct = total > 0 ? Math.round((pos / total) * 100) : 0;
+      setScrollPct(pct);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const onBackToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // determine number of selected tracks for create button visibility
+  const selectedCount = Object.values(checkedMap).filter(Boolean).length;
 
   return (
     <div className="app-layout container-fluid">
@@ -316,19 +425,82 @@ export default function App() {
 
             {/* Detail panel: only one visible at a time */}
             <div id="detail-panel" style={{ marginTop: 18 }}>
-              {selectedDetail && selectedDetail.kind === "genre" && (
-                <GenreTracks group={selectedDetail.group} onClose={() => setSelectedDetail(null)} />
-              )}
-              {selectedDetail && selectedDetail.kind === "year" && (
-                // reuse GenreTracks to display year groups (tracks array available under group.tracks)
-                <GenreTracks group={selectedDetail.group} onClose={() => setSelectedDetail(null)} />
+              {selectedDetail && (
+                <GenreTracks
+                  group={selectedDetail.group}
+                  checkedMap={checkedMap}
+                  setCheckedMap={setCheckedMap}
+                  onClose={() => setSelectedDetail(null)}
+                />
               )}
             </div>
           </main>
         </div>
       )}
 
-      {/* Loading overlay */}
+      {/* floating create-playlist button (bottom-center) */}
+      {selectedDetail && (
+        <div className="floating-create">
+          <button
+            className="create-btn"
+            onClick={handleCreateClick}
+            disabled={selectedCount === 0}
+            title={selectedCount === 0 ? "Keine Songs ausgewählt" : `Erstelle Playlist mit ${selectedCount} Songs`}
+          >
+            <i className="fa-solid fa-plus me-2"></i>
+            Playlist erstellen ({selectedCount})
+          </button>
+        </div>
+      )}
+
+      {/* create modal */}
+      {showCreateModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <h4>Playlist erstellen</h4>
+            <p>{selectedCount} Songs werden hinzugefügt.</p>
+            <label>
+              Name
+              <input value={createName} onChange={(e) => setCreateName(e.target.value)} />
+            </label>
+            <label>
+              Beschreibung
+              <input value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} />
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="checkbox" checked={createPublic} onChange={(e) => setCreatePublic(e.target.checked)} />
+              Öffentlich
+            </label>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button className="btn" onClick={() => setShowCreateModal(false)} disabled={creating}>Abbrechen</button>
+              <button className="btn btn-primary" onClick={createPlaylistOnSpotify} disabled={creating}>
+                {creating ? "Erstelle..." : "Erstellen"}
+              </button>
+            </div>
+
+            {createResult && (
+              <div style={{ marginTop: 10, color: createResult.ok ? "var(--spotify-green)" : "#f66" }}>
+                {createResult.message}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* back to top circular with scroll progress (bottom-right) */}
+      <button
+        className="back-top"
+        onClick={onBackToTop}
+        title="Nach oben"
+        style={{
+          background: `conic-gradient(var(--spotify-green) ${scrollPct}%, rgba(255,255,255,0.06) ${scrollPct}%)`,
+        }}
+      >
+        <i className="fa-solid fa-arrow-up" style={{ color: "#000" }} />
+      </button>
+
+      {/* Loading overlay (kept) */}
       {loading && (
         <div className="loading-overlay">
           <div className="loading-box">
@@ -338,7 +510,7 @@ export default function App() {
             <div style={{ marginTop: 12, textAlign: "center", color: "var(--text-main)" }}>
               <div style={{ fontWeight: 600 }}>{loadingMessage}</div>
               {progress.total > 0 && (
-                <div style={{ width: 260, marginTop: 8 }}>
+                <div style={{ width: "100%", maxWidth: 420, marginTop: 8 }}>
                   <div className="progress" style={{ height: 10 }}>
                     <div
                       className="progress-bar bg-success"
