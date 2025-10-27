@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
+import OptimizedImage from "./OptimizedImage";
 
 export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap }) {
   if (!group) return null;
   const PAGE_SIZE = 100;
-  const placeholder = "https://via.placeholder.com/64?text=No";
+  const placeholder = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='100%25' height='100%25' fill='%23161616'/%3E%3Ctext x='50%25' y='50%25' fill='%23b3b3b3' font-size='10' text-anchor='middle' dominant-baseline='middle'%3ENo%3C/text%3E%3C/svg%3E";
 
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
@@ -94,14 +95,19 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
       <div style={{ marginTop: 10 }}>
         {pageItems.map((track) => {
           const id = track.id;
+          // choose small/medium/large images from track.album.images
+          const imgs = (track.album?.images || []).map(i => i.url);
+          const srcs = [imgs[0], imgs[1], imgs[2]].filter(Boolean);
           return (
             <div key={id} className="track-row">
-              <img src={track.album?.images?.[2]?.url || placeholder} alt="" className="track-thumb" />
+              <div style={{ width: 48, height: 48 }}>
+                <OptimizedImage srcs={srcs} alt={track.name} placeholder={srcs[2] || placeholder} style={{ width: 48, height: 48, borderRadius: 4 }} />
+              </div>
+
               <div className="track-meta">
                 <div className="track-title">{track.name}</div>
                 <div className="track-sub">
                   {(track.artists || []).map(a => a.name).join(", ")} • {track.album?.release_date?.split("-")[0] || "?"}
-                  {/* Quellen anzeigen */}
                   {track.sources && track.sources.length > 0 && (
                     <div style={{ marginTop: 6 }}>
                       {track.sources.map((s, i) => (
@@ -111,8 +117,9 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
                   )}
                 </div>
               </div>
+
               <div style={{ marginLeft: "auto" }}>
-                <input type="checkbox" checked={!!(checkedMap && checkedMap[id])} onChange={() => toggle(id)} />
+                <input type="checkbox" checked={!!(checkedMap && checkedMap[id])} onChange={() => { if (setCheckedMap) setCheckedMap((s) => ({ ...s, [id]: !s[id] })); }} />
               </div>
             </div>
           );
