@@ -274,23 +274,42 @@ export default function App() {
         })).sort((a, b) => b.tracks.length - a.tracks.length);
         setGenreGroups(groups);
 
-        // build artist groups
+        // build artist groups (dedupliziert: Track-ID -> sources Set)
         const ag = [];
         for (const [aid, artist] of artistMap.entries()) {
-          const artistTracks = [];
+          // map: trackId -> { ...track, sources: Set }
+          const trackMap = new Map();
           tracks.forEach((item) => {
             const tr = item.track || item;
             if (!tr) return;
             const hasArtist = (tr.artists || []).some((a) => a.id === aid);
-            if (hasArtist) {
-              const playlistName = item._playlistName || "Unbekannt";
-              const tcopy = { ...tr };
-              tcopy.sources = tcopy.sources || [];
-              if (!tcopy.sources.includes(playlistName)) tcopy.sources.push(playlistName);
-              artistTracks.push(tcopy);
+            if (!hasArtist) return;
+            const playlistName = item._playlistName || "Unbekannt";
+            const id = tr.id;
+            if (!trackMap.has(id)) {
+              // clone track and start sources set
+              const clone = { ...tr };
+              clone.sources = new Set([playlistName]);
+              trackMap.set(id, clone);
+            } else {
+              trackMap.get(id).sources.add(playlistName);
             }
           });
-          if (artistTracks.length) ag.push({ id: aid, name: artist.name || "Unbekannt", image: artist.images?.[0]?.url || null, tracks: artistTracks });
+
+          // convert sets to arrays for rendering
+          const artistTracks = Array.from(trackMap.values()).map((t) => ({
+            ...t,
+            sources: Array.from(t.sources || []),
+          }));
+
+          if (artistTracks.length) {
+            ag.push({
+              id: aid,
+              name: artist.name || "Unbekannt",
+              image: artist.images?.[0]?.url || null,
+              tracks: artistTracks,
+            });
+          }
         }
         ag.sort((a, b) => b.tracks.length - a.tracks.length);
         setArtistGroups(ag);
