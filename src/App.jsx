@@ -406,6 +406,21 @@ export default function App() {
     setSelectedDetail({ kind: "year", source, group });
   };
 
+  // open playlist detail (click on a playlist tile -> show only tracks from that playlist)
+  const openPlaylistDetail = (playlistId) => {
+    const pl = playlists.find((p) => p.id === playlistId);
+    if (!pl) return;
+    const items = tracks
+      .filter((item) => item._playlistId === playlistId)
+      .map((it) => {
+        const tr = it.track || it;
+        return { ...tr, sources: [it._playlistName || pl.name] };
+      });
+    const group = { title: pl.name, image: pl.images?.[0]?.url || null, tracks: items };
+    setSelectedDetail({ kind: "playlist", group });
+    setSection("playlists");
+  };
+
   // scroll to playlist list element
   const scrollToPlaylist = (id) => {
     setSelectedDetail(null);
