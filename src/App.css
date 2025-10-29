@@ -123,12 +123,21 @@ body {
 
 .track-row { display:flex; align-items:center; padding:8px 6px; border-bottom:1px solid rgba(255,255,255,0.03); }
 .track-thumb { width:48px; height:48px; object-fit:cover; border-radius:4px; margin-right:10px; }
-.track-meta { min-width: 220px; }
+.track-meta { margin-left: 20px; }
 .track-title { font-weight:600; color: var(--text-main); }
 .track-sub { font-size: 13px; color: var(--text-sub); }
 
 /* Pagination */
 .pagination { display:flex; gap:8px; align-items:center; margin-top:12px; color: var(--text-sub); }
+.pagination button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-main);
+  cursor: pointer;
+}
+.pagination span { color: var(--text-sub); }
 
 /* Loading overlay */
 .loading-overlay {
@@ -319,3 +328,20 @@ body {
   border-color: rgba(255,255,255,0.03);
   color: var(--text-sub);
 }
+
+/* make titles and control buttons in lists fully visible */
+.genre-tracks h3, .genre-tracks .btn, .genre-tracks .controls select, .genre-tracks .controls input {
+  color: var(--text-main);
+}
+
+/* hide disabled buttons (as requested) */
+button:disabled { display: none !important; }
+
+/* remove legend in playlists: legacy selector (if still exists) */
+.legend { display: none !important; }
+
+/* make sidebar badges consistent */
+.nav-item .badge { background: rgba(255,255,255,0.06); color: var(--text-main); }
+
+/* ensure artist sidebar icon looks good */
+.nav-item i.fa-star { color: var(--spotify-green); }

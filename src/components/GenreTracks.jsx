@@ -4,18 +4,17 @@ import OptimizedImage from "./OptimizedImage";
 export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap }) {
   if (!group) return null;
   const PAGE_SIZE = 100;
-  const placeholder = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='100%25' height='100%25' fill='%23161616'/%3E%3Ctext x='50%25' y='50%25' fill='%23b3b3b3' font-size='10' text-anchor='middle' dominant-baseline='middle'%3ENo%3C/text%3E%3C/svg%3E";
 
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("");
-  const [sortBy, setSortBy] = useState("name"); // name | year | added_at
+  const [sortBy, setSortBy] = useState("name");
 
-  // initialize checkedMap if parent didn't yet
   useEffect(() => {
     if (!group) return;
-    const initial = Object.fromEntries((group.tracks || []).map((t) => [t.id, true]));
-    // only set if parent didn't already set it (or set forced)
+    const initial = {};
+    const arr = group.tracks || [];
+    arr.forEach((t) => { const id = t.id; initial[id] = true; });
     if (setCheckedMap) setCheckedMap(initial);
   }, [group, setCheckedMap]);
 
@@ -25,28 +24,10 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
       const q = query.toLowerCase();
       list = list.filter((t) => (t.name || "").toLowerCase().includes(q) || (t.artists || []).some(a => a.name.toLowerCase().includes(q)));
     }
-    if (yearFilter) {
-      list = list.filter((t) => {
-        const rel = t.album?.release_date || "";
-        const year = rel.split("-")[0];
-        return year === yearFilter;
-      });
-    }
-    if (sortBy === "year") {
-      list.sort((a, b) => {
-        const ay = +(a.album?.release_date || "").split("-")[0] || 0;
-        const by = +(b.album?.release_date || "").split("-")[0] || 0;
-        return by - ay;
-      });
-    } else if (sortBy === "added_at") {
-      list.sort((a, b) => {
-        const atA = new Date(a.added_at || 0).getTime();
-        const atB = new Date(b.added_at || 0).getTime();
-        return atB - atA;
-      });
-    } else {
-      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    }
+    if (yearFilter) list = list.filter((t) => (t.album?.release_date || "").split("-")[0] === yearFilter);
+    if (sortBy === "year") list.sort((a,b) => (+(b.album?.release_date||"0").split("-")[0]) - (+(a.album?.release_date||"0").split("-")[0]));
+    else if (sortBy === "added_at") list.sort((a,b) => new Date(b.added_at||0).getTime() - new Date(a.added_at||0).getTime());
+    else list.sort((a,b) => (a.name||"").localeCompare(b.name||""));
     return list;
   }, [group, query, yearFilter, sortBy]);
 
@@ -76,7 +57,7 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
         <div style={{ color: "var(--text-sub)" }}>{group.genre || group.title}</div>
       </div>
 
-      <h3 style={{ marginTop: 8 }}>{group.genre || group.title} — {group.tracks.length} Songs</h3>
+      <h3 style={{ marginTop: 8, color: "var(--text-main)" }}>{group.genre || group.title} — {group.tracks.length} Songs</h3>
 
       <div className="controls">
         <input placeholder="Suche Titel/Interpret" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
@@ -95,13 +76,12 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
       <div style={{ marginTop: 10 }}>
         {pageItems.map((track) => {
           const id = track.id;
-          // choose small/medium/large images from track.album.images
           const imgs = (track.album?.images || []).map(i => i.url);
-          const srcs = [imgs[0], imgs[1], imgs[2]].filter(Boolean);
+          const srcs = [imgs[2], imgs[1], imgs[0]].filter(Boolean);
           return (
             <div key={id} className="track-row">
               <div style={{ width: 48, height: 48 }}>
-                <OptimizedImage srcs={srcs} alt={track.name} placeholder={srcs[2] || placeholder} style={{ width: 48, height: 48, borderRadius: 4 }} />
+                <OptimizedImage srcs={srcs} alt={track.name} placeholder="" style={{ width: 48, height: 48, borderRadius: 4 }} />
               </div>
 
               <div className="track-meta">
@@ -119,7 +99,7 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
               </div>
 
               <div style={{ marginLeft: "auto" }}>
-                <input type="checkbox" checked={!!(checkedMap && checkedMap[id])} onChange={() => { if (setCheckedMap) setCheckedMap((s) => ({ ...s, [id]: !s[id] })); }} />
+                <input type="checkbox" checked={!!(checkedMap && checkedMap[id])} onChange={() => toggle(id)} />
               </div>
             </div>
           );
@@ -127,9 +107,9 @@ export default function GenreTracks({ group, onClose, checkedMap, setCheckedMap 
       </div>
 
       <div className="pagination">
-        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>Prev</button>
+        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>Zurück</button>
         <span>Seite {page} / {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}</span>
-        <button onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), p + 1))} disabled={page >= Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}>Next</button>
+        <button onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), p + 1))} disabled={page >= Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}>Weiter</button>
       </div>
     </div>
   );

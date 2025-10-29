@@ -2,7 +2,7 @@ import React from "react";
 import OptimizedImage from "./OptimizedImage";
 
 export default function PlaylistList({ playlists = [], onTileClick = () => {} }) {
-  const placeholder = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='100%25' height='100%25' fill='%23161616'/%3E%3Ctext x='50%25' y='50%25' fill='%23b3b3b3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3EKein Bild%3C/text%3E%3C/svg%3E";
+  const placeholder = ""; // leave empty: OptimizedImage will show icon placeholder
 
   return (
     <div>
@@ -13,9 +13,9 @@ export default function PlaylistList({ playlists = [], onTileClick = () => {} })
 
       <div className="playlist-grid">
         {playlists.map((pl) => {
-          // try to provide prioritized srcs: small -> medium -> large if available
           const urls = (pl.images || []).map((i) => i.url);
-          const srcs = [urls[0], urls[1], urls[2]].filter(Boolean);
+          // prefer smaller images first if available to save bandwidth
+          const srcs = [urls[2], urls[1], urls[0]].filter(Boolean);
           return (
             <div
               key={pl.id}
@@ -29,7 +29,7 @@ export default function PlaylistList({ playlists = [], onTileClick = () => {} })
                 <OptimizedImage
                   srcs={srcs}
                   alt={pl.name}
-                  placeholder={srcs[2] || placeholder}
+                  placeholder={placeholder}
                   style={{ width: "100%", height: 150, borderRadius: 6 }}
                 />
 

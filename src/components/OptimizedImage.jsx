@@ -2,11 +2,9 @@ import React, { useRef, useState, useEffect } from "react";
 
 /**
  * OptimizedImage
- * props:
- *  - srcs: array of image urls (prefer [large, medium, small] or ([small] works))
- *  - alt, className
- *  - placeholder: url for a tiny placeholder (optional, fallback to icon)
- *  - style: extra style
+ * - lazy loads via IntersectionObserver
+ * - shows FA-image icon placeholder (weiß auf schwarz, blurred) until loaded
+ * - accepts srcs array (prefer small first)
  */
 export default function OptimizedImage({ srcs = [], alt = "", className = "", placeholder = "", style = {} }) {
   const ref = useRef(null);
@@ -33,7 +31,7 @@ export default function OptimizedImage({ srcs = [], alt = "", className = "", pl
 
   useEffect(() => {
     if (!inView) return;
-    const candidate = srcs.find(Boolean) || placeholder || "";
+    const candidate = (srcs || []).find(Boolean) || placeholder || "";
     setSrc(candidate);
   }, [inView, srcs, placeholder]);
 
@@ -47,8 +45,8 @@ export default function OptimizedImage({ srcs = [], alt = "", className = "", pl
         backgroundColor: "#000",
         ...style,
       }}
+      aria-hidden={false}
     >
-      {/* placeholder: FontAwesome icon centered on black blurred bg while image not loaded */}
       {!loaded && (
         <div className="opt-placeholder" aria-hidden="true">
           <i className="fa-solid fa-image" />

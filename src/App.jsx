@@ -602,6 +602,36 @@ export default function App() {
               </div>
             )}
 
+            {section === "start" && (
+              <div>
+                <h2 style={{ color: "var(--text-main)" }}>Startseite</h2>
+
+                <div style={{ marginTop: 10, color: "var(--text-sub)", maxWidth: 760 }}>
+                  <h4 style={{ color: "var(--text-main)" }}>Was macht diese App?</h4>
+                  <ul style={{ color: "var(--text-sub)", lineHeight: 1.6 }}>
+                    <li>Analysiert deine Playlists und Lieblingssongs (Saved Tracks) und gruppiert Tracks nach Genre, Künstler und Jahr.</li>
+                    <li>Ermöglicht das selektive Erstellen neuer Spotify‑Playlists aus einer Listenansicht — wähle Songs per Checkbox aus.</li>
+                    <li>Speichert Playlists direkt in deinem eingeloggten Spotify‑Account (erfordert passende OAuth‑Scopes).</li>
+                  </ul>
+
+                  <h4 style={{ color: "var(--text-main)", marginTop: 12 }}>Wie erstelle ich eine Playlist?</h4>
+                  <ol style={{ color: "var(--text-sub)", lineHeight: 1.6 }}>
+                    <li>Wähle in der Sidebar eine Kategorie (Playlists, Künstler, Genre, Jahr).</li>
+                    <li>Klicke auf eine Kachel, um die zugehörigen Tracks unten in der Listenansicht anzuzeigen.</li>
+                    <li>Deaktiviere per Checkbox Tracks, die nicht in die neue Playlist sollen.</li>
+                    <li>Klicke auf den grünen "Playlist erstellen"-Button unten in der Mitte, gib einen Namen ein und bestätige.</li>
+                  </ol>
+
+                  <h4 style={{ color: "var(--text-main)", marginTop: 12 }}>Hinweise</h4>
+                  <ul style={{ color: "var(--text-sub)", lineHeight: 1.6 }}>
+                    <li>Für die Anzeige deiner "Lieblingssongs" muss die App den Scope <code>user-library-read</code> haben.</li>
+                    <li>Die App nutzt Lazy‑Loading und Platzhalter für Bilder, um Bandbreite zu sparen.</li>
+                    <li>Bei Problemen mit fehlenden Tracks oder Genres prüfe bitte die OAuth‑Scopes und redeploy/erneute Anmeldung.</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
             {/* Detail panel: only one visible at a time */}
             <div id="detail-panel" style={{ marginTop: 18 }}>
               {selectedDetail && (
