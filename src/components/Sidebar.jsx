@@ -13,7 +13,7 @@ export default function Sidebar({ selected, onSelect, counts = {} }) {
         </button>
 
         <button className={`nav-item ${selected === "playlists" ? "active" : ""}`} onClick={() => onSelect("playlists")}>
-          <i className="fa-solid fa-list-music me-2"></i> Deine Playlists <span className="badge ms-auto">{counts.playlists ?? 0}</span>
+          <i className="fa-solid fa-list me-2"></i> Deine Playlists <span className="badge ms-auto">{counts.playlists ?? 0}</span>
         </button>
 
         <button className={`nav-item ${selected === "artists" ? "active" : ""}`} onClick={() => onSelect("artists")}>
