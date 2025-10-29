@@ -345,3 +345,5 @@ button:disabled { display: none !important; }
 
 /* ensure artist sidebar icon looks good */
 .nav-item i.fa-star { color: var(--spotify-green); }
+
+nav.sidebar-nav .nav-item i.fa-star { color: #fff; }
