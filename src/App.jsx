@@ -183,12 +183,90 @@ export default function App() {
       return;
     }
 
-    const buildGenresAndArtists = async () => {
+    let cancelled = false;
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // fetch artist chunks with concurrency, retry and 429 handling
+    const fetchArtistsWithRateLimit = async (ids) => {
+      const CHUNK_SIZE = 50; // Spotify max
+      const MAX_CONCURRENCY = 3; // avoid spamming
+      const RETRY_LIMIT = 3;
+
+      // chunk ids
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) chunks.push(ids.slice(i, i + CHUNK_SIZE));
+
+      // try reusing cached artist map in sessionStorage
+      const cacheKey = "artistCache_v1";
+      let cached = {};
+      try { cached = JSON.parse(sessionStorage.getItem(cacheKey) || "{}"); } catch (e) { cached = {}; }
+
+      const artistMap = new Map(Object.entries(cached)); // id -> artist object (strings -> JSON)
+
+      const toFetch = chunks.map((c) => c.filter((id) => !artistMap.has(id))).filter((c) => c.length);
+
+      // queue with limited concurrency
+      const results = [];
+      let idx = 0;
+      const worker = async () => {
+        while (true) {
+          if (cancelled) return;
+          const i = idx++;
+          if (i >= toFetch.length) return;
+          const chunkIds = toFetch[i];
+          let attempt = 0;
+          while (attempt < RETRY_LIMIT && !cancelled) {
+            attempt++;
+            try {
+              const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunkIds.join(",")}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              (res.data.artists || []).forEach((a) => {
+                if (a && a.id) artistMap.set(a.id, a);
+              });
+              // persist partial cache
+              try {
+                const obj = Object.fromEntries(artistMap);
+                sessionStorage.setItem(cacheKey, JSON.stringify(obj));
+              } catch (e) { /* ignore storage errors */ }
+
+              // immediate partial update so UI can render progressively
+              results.push({ ok: true, count: chunkIds.length });
+              break;
+            } catch (err) {
+              const status = err?.response?.status;
+              // handle 429 Retry-After
+              if (status === 429) {
+                const retryAfter = parseInt(err?.response?.headers?.["retry-after"] || "1", 10) || 1;
+                await sleep((retryAfter + 0.5) * 1000);
+                continue;
+              }
+              // exponential backoff for other transient errors
+              const backoff = 200 * Math.pow(2, attempt);
+              await sleep(backoff);
+              if (attempt >= RETRY_LIMIT) {
+                results.push({ ok: false, err });
+              }
+            }
+          }
+          // small delay between workers to ease rate pressure
+          await sleep(120);
+        }
+      };
+
+      // start workers
+      const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, toFetch.length) }, () => worker());
+      await Promise.all(workers);
+
+      return artistMap;
+    };
+
+    const build = async () => {
       try {
         setLoading(true);
         setLoadingMessage("Hole Künstlerdaten und gruppiere nach Genre...");
-
-        // collect unique artist ids
+        // gather unique artist ids
         const artistIds = new Set();
         tracks.forEach((item) => {
           const tr = item.track || item;
@@ -204,51 +282,18 @@ export default function App() {
           return;
         }
 
-        // chunk ids (50 per request)
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+        // fetch artist metadata with rate limiting + cache
+        setProgress({ current: 0, total: Math.ceil(ids.length / 50) });
+        const artistMap = await fetchArtistsWithRateLimit(ids);
 
-        // progress reset
-        setProgress({ current: 0, total: chunks.length });
+        if (cancelled) return;
 
-        // fetch chunks in parallel (allSettled) and retry failed chunks once
-        const fetchChunk = async (chunk) => {
-          try {
-            const res = await axios.get(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            return { ok: true, data: res.data.artists || [] };
-          } catch (err) {
-            return { ok: false, err };
-          }
-        };
-
-        // first pass
-        const first = await Promise.all(chunks.map((c) => fetchChunk(c)));
-        // retry failed
-        const retryPromises = first.map((r, idx) => (r.ok ? Promise.resolve(r) : fetchChunk(chunks[idx])));
-        const final = await Promise.all(retryPromises);
-
-        // advance progress (count successes)
-        const successCount = final.filter((r) => r.ok).length;
-        setProgress({ current: successCount, total: chunks.length });
-
-        // build artistMap from successes
-        const artistMap = new Map();
-        final.forEach((r) => {
-          if (r.ok && Array.isArray(r.data)) {
-            r.data.forEach((a) => a && a.id && artistMap.set(a.id, a));
-          }
-        });
-
-        // Fallback: if some artist ids missing, create minimal placeholders
+        // fallback placeholders for missing artists
         ids.forEach((aid) => {
-          if (!artistMap.has(aid)) {
-            artistMap.set(aid, { id: aid, name: "Unbekannt", genres: [], images: [] });
-          }
+          if (!artistMap.has(aid)) artistMap.set(aid, { id: aid, name: "Unbekannt", genres: [], images: [] });
         });
 
-        // build genre groups
+        // build genre groups (dedup by track id, collect sources)
         const genreMap = new Map();
         tracks.forEach((item) => {
           const tr = item.track || item;
@@ -259,7 +304,7 @@ export default function App() {
             const artist = artistMap.get(a.id) || { genres: [], images: [] };
             const genres = (artist.genres && artist.genres.length) ? artist.genres : ["Unbekannt"];
             genres.forEach((g) => {
-              if (!genreMap.has(g)) genreMap.set(g, { image: artist?.images?.[0]?.url || null, tracks: new Map() });
+              if (!genreMap.has(g)) genreMap.set(g, { image: artist.images?.[0]?.url || null, tracks: new Map() });
               const entry = genreMap.get(g).tracks;
               if (!entry.has(trackId)) entry.set(trackId, { track: tr, sources: new Set([playlistName]) });
               else entry.get(trackId).sources.add(playlistName);
@@ -272,69 +317,49 @@ export default function App() {
           image: data.image,
           tracks: Array.from(data.tracks.values()).map((v) => ({ ...v.track, sources: Array.from(v.sources) })),
         })).sort((a, b) => b.tracks.length - a.tracks.length);
-        setGenreGroups(groups);
 
-        // build artist groups (dedupliziert: Track-ID -> sources Set)
+        // artist groups: deduplicate tracks per artist and gather sources
         const ag = [];
         for (const [aid, artist] of artistMap.entries()) {
-          // map: trackId -> { ...track, sources: Set }
           const trackMap = new Map();
           tracks.forEach((item) => {
             const tr = item.track || item;
             if (!tr) return;
-            const hasArtist = (tr.artists || []).some((a) => a.id === aid);
+            const hasArtist = (tr.artists || []).some((ar) => ar.id === aid);
             if (!hasArtist) return;
             const playlistName = item._playlistName || "Unbekannt";
             const id = tr.id;
             if (!trackMap.has(id)) {
-              // clone track and start sources set
-              const clone = { ...tr };
-              clone.sources = new Set([playlistName]);
+              const clone = { ...tr, sources: new Set([playlistName]) };
               trackMap.set(id, clone);
             } else {
               trackMap.get(id).sources.add(playlistName);
             }
           });
-
-          // convert sets to arrays for rendering
-          const artistTracks = Array.from(trackMap.values()).map((t) => ({
-            ...t,
-            sources: Array.from(t.sources || []),
-          }));
-
-          if (artistTracks.length) {
-            ag.push({
-              id: aid,
-              name: artist.name || "Unbekannt",
-              image: artist.images?.[0]?.url || null,
-              tracks: artistTracks,
-            });
-          }
+          const artistTracks = Array.from(trackMap.values()).map((t) => ({ ...t, sources: Array.from(t.sources || []) }));
+          if (artistTracks.length) ag.push({ id: aid, name: artist.name || "Unbekannt", image: artist.images?.[0]?.url || null, tracks: artistTracks });
         }
         ag.sort((a, b) => b.tracks.length - a.tracks.length);
+
+        if (cancelled) return;
+        setGenreGroups(groups);
         setArtistGroups(ag);
+        setLoadingMessage("");
       } catch (err) {
         console.error("Genre/Artist build error:", err?.response?.data || err.message || err);
-        // detect /me/tracks permission problems or token issues
-        const respData = err?.response?.data;
-        if (respData && respData.error) {
-          const msg = respData.error.message || JSON.stringify(respData.error);
-          if (msg.toLowerCase().includes("scope") || err?.response?.status === 401 || err?.response?.status === 403) {
-            setLoadingMessage("Fehler: fehlende Berechtigung für Saved Tracks. Bitte erneut mit Scope user-library-read einloggen.");
-          } else {
-            setLoadingMessage(`Fehler beim Gruppieren: ${msg}`);
-          }
-        } else {
-          setLoadingMessage("Fehler beim Gruppieren (siehe Konsole).");
-        }
+        setLoadingMessage("Fehler beim Gruppieren (siehe Konsole).");
       } finally {
-        setLoading(false);
-        // clear progress after short delay so user sees 100%
-        setTimeout(() => setProgress({ current: 0, total: 0 }), 400);
+        if (!cancelled) {
+          setLoading(false);
+          // clear progress after short delay so user sees 100%
+          setTimeout(() => setProgress({ current: 0, total: 0 }), 400);
+        }
       }
     };
 
-    buildGenresAndArtists();
+    build();
+
+    return () => { cancelled = true; };
   }, [token, tracks]);
 
   // Year groups: added_at (when you added to playlists) & release year — jetzt mit Quellen

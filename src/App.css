@@ -68,8 +68,8 @@ body {
 /* Playlist tiles */
 .playlist-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top:12px; }
 .playlist-tile {
-  width: 260px;                 /* same as genre-tile */
-  height: 160px;                /* match genre tile height */
+  width: 260px;
+  height: 160px;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 6px 18px rgba(0,0,0,0.6);
@@ -84,28 +84,41 @@ body {
 .truncate { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Playlist tile overlay (title + meta over image while loading) */
+.playlist-image-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+/* overlay always visible and matching genre tiles */
 .playlist-image-overlay {
   position: absolute;
   left: 12px;
   right: 12px;
   bottom: 12px;
-  z-index: 4;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 4px;
   color: var(--text-main);
   text-shadow: 0 2px 10px rgba(0,0,0,0.6);
   pointer-events: none;
+  opacity: 1;            /* ensure visible (not hover dependent) */
+  transition: none;
 }
+
+/* typography matching genre tiles */
 .playlist-image-title {
   font-weight: 700;
-  font-size: 20px; /* match .genre-title */
+  font-size: 20px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .playlist-image-meta {
-  font-size: 13px; /* match .genre-sub */
+  font-size: 13px;
   color: var(--text-sub);
 }
 

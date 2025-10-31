@@ -20,7 +20,6 @@ export default function PlaylistList({ playlists = [], onTileClick = () => {} })
               tabIndex={0}
               title={pl.name}
             >
-              {/* make wrapper same size as genre tiles */}
               <div className="playlist-image-wrap">
                 <OptimizedImage
                   srcs={srcs}
@@ -29,7 +28,7 @@ export default function PlaylistList({ playlists = [], onTileClick = () => {} })
                   style={{ width: "100%", height: "100%", borderRadius: 10 }}
                 />
 
-                {/* overlay: title + meta shown over image (visible auch während Placeholder) */}
+                {/* overlay: always visible, positioned over image */}
                 <div className="playlist-image-overlay">
                   <div className="playlist-image-title">{pl.name}</div>
                   <div className="playlist-image-meta">{pl.tracks?.total ?? 0} Songs</div>
