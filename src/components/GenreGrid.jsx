@@ -15,7 +15,7 @@ export default function GenreGrid({ groups = [], onSelect = () => {}, onVisibleI
         const lid = g.genre || g.title || g.id;
         const isLoading = loadingIds && typeof loadingIds.has === "function" && loadingIds.has(lid);
         return (
-          <div key={key} className="genre-tile" role="button" onClick={() => onSelect(g)} style={{ width: 260, height: 160 }}>
+          <div key={key} className="genre-tile" role="button" onClick={() => onSelect(g)}>
             <OptimizedImage srcs={srcs} placeholder={""} style={{ width: "100%", height: "100%", borderRadius: 10 }} />
             <div className="genre-tile-overlay">
               <div className="genre-title">{g.genre || g.title}</div>

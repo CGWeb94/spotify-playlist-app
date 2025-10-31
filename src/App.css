@@ -397,8 +397,6 @@ nav.sidebar-nav .nav-item i.fa-star { color: #fff; }
 
 /* ensure tiles fill the grid cell */
 .genre-tile {
-  width: 260px;
-  height: 160px;
   border-radius: 10px;
   background-size: cover;
   background-position: center;
