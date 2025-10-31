@@ -68,17 +68,19 @@ body {
 /* Playlist tiles */
 .playlist-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top:12px; }
 .playlist-tile {
-  width: 240px;
+  width: 260px;                 /* same as genre-tile */
+  height: 160px;                /* match genre tile height */
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 6px 18px rgba(0,0,0,0.6);
   cursor: pointer;
   transition: transform .18s ease, box-shadow .18s ease;
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  display: inline-block;
 }
-.playlist-tile:hover { transform: translateY(-6px); box-shadow: 0 24px 48px rgba(0,0,0,0.7); }
+.playlist-tile:hover { transform: translateY(-6px); box-shadow: 0 28px 56px rgba(0,0,0,0.75); }
 .playlist-image { width: 100%; height: 150px; object-fit: cover; display:block; }
-.playlist-info { padding: 10px; text-align: left; color: var(--text-main); }
+.playlist-info { display: none; }
 .truncate { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Playlist tile overlay (title + meta over image while loading) */
@@ -97,13 +99,13 @@ body {
 }
 .playlist-image-title {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 20px; /* match .genre-title */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .playlist-image-meta {
-  font-size: 12px;
+  font-size: 13px; /* match .genre-sub */
   color: var(--text-sub);
 }
 
