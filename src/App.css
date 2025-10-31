@@ -81,6 +81,32 @@ body {
 .playlist-info { padding: 10px; text-align: left; color: var(--text-main); }
 .truncate { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Playlist tile overlay (title + meta over image while loading) */
+.playlist-image-overlay {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-main);
+  text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+.playlist-image-title {
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-image-meta {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
 /* Genre / Year tile */
 .genre-tile {
   width: 260px;

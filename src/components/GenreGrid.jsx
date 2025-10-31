@@ -1,25 +1,34 @@
 import React from "react";
+import OptimizedImage from "./OptimizedImage";
 
-export default function GenreGrid({ groups = [], onSelect }) {
-  const placeholder = "https://via.placeholder.com/600x400?text=Genre";
-  if (!groups || groups.length === 0) return <p>Keine Genres gefunden</p>;
+/**
+ * GenreGrid
+ * props:
+ *  - groups: [{ genre, image, tracks: [...] }]
+ *  - onSelect: fn(group)
+ */
+export default function GenreGrid({ groups = [], onSelect = () => {} }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "14px" }}>
-      {groups.map((g) => (
-        <div
-          key={g.genre}
-          className="genre-tile"
-          onClick={() => onSelect(g)}
-          style={{
-            backgroundImage: `url(${g.image || placeholder})`,
-          }}
-        >
-          <div className="genre-tile-overlay">
-            <div className="genre-title">{g.genre}</div>
-            <div className="genre-sub">{g.tracks.length} Songs</div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+      {groups.map((g) => {
+        const key = g.genre || g.title || String(Math.random());
+        const srcs = g.image ? [g.image] : [];
+        return (
+          <div
+            key={key}
+            className="genre-tile"
+            role="button"
+            onClick={() => onSelect(g)}
+            style={{ width: 260, height: 160 }}
+          >
+            <OptimizedImage srcs={srcs} placeholder={""} style={{ width: "100%", height: "100%", borderRadius: 10 }} />
+            <div className="genre-tile-overlay">
+              <div className="genre-title">{g.genre || g.title}</div>
+              <div className="genre-sub">{(g.tracks || []).length} Songs</div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
