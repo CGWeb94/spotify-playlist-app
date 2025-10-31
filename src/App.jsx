@@ -9,6 +9,7 @@ import YearGrid from "./components/YearGrid";
 import Sidebar from "./components/Sidebar";
 import ArtistsGrid from "./components/ArtistsGrid";
 import "./App.css";
+import { fetchPlaylistTracksForIds, fetchArtistsByIds } from "./lib/fetchMeta";
 
 export default function App() {
   // auth & data state (kept)
@@ -559,6 +560,42 @@ export default function App() {
 
   // determine number of selected tracks for create button visibility
   const selectedCount = Object.values(checkedMap).filter(Boolean).length;
+
+  // handle playlists visible (from Sidebar or elsewhere)
+  const handlePlaylistsVisible = async (visiblePlaylists) => {
+    if (!token || !visiblePlaylists?.length) return;
+    const ids = visiblePlaylists.map((p) => p.id).filter(Boolean);
+    const map = await fetchPlaylistTracksForIds(token, ids);
+    // integrate results into your global tracks state as you see fit:
+    // e.g. annotate and merge only if not already present
+    const newItems = [];
+    ids.forEach((id) => {
+      const items = map[id] || [];
+      items.forEach((it) => {
+        // each it is playlist track object; annotate with playlist meta
+        newItems.push({ ...it, _playlistId: id, _playlistName: (playlists.find(p => p.id === id)?.name || "Unbekannt") });
+      });
+    });
+    // merge newItems into tracks state only if not present
+    setTracks((prev) => {
+      const ids = new Set(prev.map((it) => (it.track || it).id));
+      const merged = prev.slice();
+      newItems.forEach((ni) => {
+        const tid = (ni.track || ni).id;
+        if (!ids.has(tid)) merged.push(ni);
+      });
+      return merged;
+    });
+  };
+
+  // artists: when artists page visible, fetch artist metadata to fill images/genres
+  const handleArtistsVisible = async (visibleArtists) => {
+    if (!token || !visibleArtists?.length) return;
+    const ids = visibleArtists.map((a) => a.id).filter(Boolean);
+    const map = await fetchArtistsByIds(token, ids);
+    // update artistGroups (or other state) with fetched data:
+    setArtistGroups((prev) => prev.map((g) => ({ ...g, image: (map[g.id] && map[g.id].images?.[0]?.url) || g.image })));
+  };
 
   return (
     <div className="app-layout container-fluid">
