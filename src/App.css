@@ -394,5 +394,30 @@ nav.sidebar-nav .nav-item i.fa-star { color: #fff; }
 .grid-pagination { display:flex; gap:8px; align-items:center; margin-top:12px; }
 .grid-pagination .page-indicator { color: var(--text-sub); font-size:13px; }
 
-/* ensure genre/playlist tiles still line up */
-.genre-tile, .playlist-tile { display:inline-block; }
+/* spinner & responsive grid for PaginatedGrid */
+.tile-spinner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.paginated-grid .grid-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* ensure tiles fill the grid cell */
+.genre-tile, .playlist-tile { width: 100%; height: 160px; position: relative; }
+.opt-img-wrap { width: 100%; height: 100%; }
+
+/* search input larger and full width */
+.paginated-grid input[aria-label="Grid-Suche"] { width: 100%; font-size: 16px; padding: 12px 14px; }
+
+/* overlay typography parity */
+.playlist-image-title, .genre-title { font-size: 20px; font-weight: 700; }
+.playlist-image-meta, .genre-sub { font-size: 13px; color: var(--text-sub); }

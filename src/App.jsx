@@ -49,6 +49,29 @@ export default function App() {
   // scroll progress for back-to-top
   const [scrollPct, setScrollPct] = useState(0);
 
+  // per-tile loading state (sets of ids)
+  const [loadingTiles, setLoadingTiles] = useState({
+    playlists: new Set(),
+    artists: new Set(),
+    genres: new Set(),
+  });
+
+  const setTileLoading = (type, ids = [], loading = true) => {
+    setLoadingTiles((prev) => {
+      const copy = {
+        playlists: new Set(prev.playlists),
+        artists: new Set(prev.artists),
+        genres: new Set(prev.genres),
+      };
+      ids.forEach((id) => {
+        if (!id) return;
+        if (loading) copy[type].add(id);
+        else copy[type].delete(id);
+      });
+      return copy;
+    });
+  };
+
   // --- auth, playlists, tracks, groups effects (kept same as before) ---
   // put here your existing effects for auth, playlists, tracks pagination, buildGenres, build years...
   // Auth -> token (unchanged)
@@ -565,36 +588,78 @@ export default function App() {
   const handlePlaylistsVisible = async (visiblePlaylists) => {
     if (!token || !visiblePlaylists?.length) return;
     const ids = visiblePlaylists.map((p) => p.id).filter(Boolean);
-    const map = await fetchPlaylistTracksForIds(token, ids);
-    // integrate results into your global tracks state as you see fit:
-    // e.g. annotate and merge only if not already present
-    const newItems = [];
-    ids.forEach((id) => {
-      const items = map[id] || [];
-      items.forEach((it) => {
-        // each it is playlist track object; annotate with playlist meta
-        newItems.push({ ...it, _playlistId: id, _playlistName: (playlists.find(p => p.id === id)?.name || "Unbekannt") });
+    setTileLoading("playlists", ids, true);
+    try {
+      const map = await fetchPlaylistTracksForIds(token, ids);
+      const newItems = [];
+      ids.forEach((id) => {
+        const items = map[id] || [];
+        items.forEach((it) => {
+          newItems.push({ ...it, _playlistId: id, _playlistName: (playlists.find((p) => p.id === id)?.name || "Unbekannt") });
+        });
       });
-    });
-    // merge newItems into tracks state only if not present
-    setTracks((prev) => {
-      const ids = new Set(prev.map((it) => (it.track || it).id));
-      const merged = prev.slice();
-      newItems.forEach((ni) => {
-        const tid = (ni.track || ni).id;
-        if (!ids.has(tid)) merged.push(ni);
+      setTracks((prev) => {
+        const existing = new Set(prev.map((it) => (it.track || it).id));
+        const merged = prev.slice();
+        newItems.forEach((ni) => {
+          const tid = (ni.track || ni).id;
+          if (!existing.has(tid)) merged.push(ni);
+        });
+        return merged;
       });
-      return merged;
-    });
+    } catch (e) {
+      console.error("handlePlaylistsVisible error", e);
+    } finally {
+      setTileLoading("playlists", ids, false);
+    }
   };
 
-  // artists: when artists page visible, fetch artist metadata to fill images/genres
   const handleArtistsVisible = async (visibleArtists) => {
     if (!token || !visibleArtists?.length) return;
     const ids = visibleArtists.map((a) => a.id).filter(Boolean);
-    const map = await fetchArtistsByIds(token, ids);
-    // update artistGroups (or other state) with fetched data:
-    setArtistGroups((prev) => prev.map((g) => ({ ...g, image: (map[g.id] && map[g.id].images?.[0]?.url) || g.image })));
+    setTileLoading("artists", ids, true);
+    try {
+      const map = await fetchArtistsByIds(token, ids);
+      setArtistGroups((prev) => prev.map((g) => ({ ...g, image: (map[g.id] && map[g.id].images?.[0]?.url) || g.image })));
+    } catch (e) {
+      console.error("handleArtistsVisible error", e);
+    } finally {
+      setTileLoading("artists", ids, false);
+    }
+  };
+
+  const handleGenresVisible = async (visibleGroups) => {
+    if (!token || !visibleGroups?.length) return;
+    const artistIds = new Set();
+    visibleGroups.forEach((g) => {
+      (g.tracks || []).forEach((t) => {
+        const artists = t.artists || (t.track && t.track.artists) || [];
+        if (artists.length && artists[0].id) artistIds.add(artists[0].id);
+      });
+    });
+    const ids = Array.from(artistIds).filter(Boolean);
+    if (!ids.length) return;
+    const lidList = visibleGroups.map((g) => g.genre || g.title || g.id).filter(Boolean);
+    setTileLoading("genres", lidList, true);
+    try {
+      const map = await fetchArtistsByIds(token, ids);
+      setGenreGroups((prev) =>
+        prev.map((g) => {
+          if (g.image) return g;
+          for (const t of (g.tracks || [])) {
+            const a = (t.artists || (t.track && t.track.artists) || [])[0];
+            if (a && map[a.id] && map[a.id].images?.[0]?.url) {
+              return { ...g, image: map[a.id].images[0].url };
+            }
+          }
+          return g;
+        })
+      );
+    } catch (e) {
+      console.error("handleGenresVisible error", e);
+    } finally {
+      setTileLoading("genres", lidList, false);
+    }
   };
 
   return (

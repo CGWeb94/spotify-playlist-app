@@ -43,7 +43,6 @@ export async function fetchPlaylistTracksForIds(token, playlistIds = [], { cache
   try { cache = JSON.parse(sessionStorage.getItem(cacheKey) || "{}"); } catch (e) { cache = {}; }
   const toFetch = playlistIds.filter((id) => !cache[id]);
 
-  // build urls for each playlist (we fetch first 100 tracks only to keep latency low)
   const urls = toFetch.map((id) => `https://api.spotify.com/v1/playlists/${id}/tracks?limit=100`);
 
   const res = await chunkedGet(urls, token, { concurrency: 2 });
@@ -52,13 +51,11 @@ export async function fetchPlaylistTracksForIds(token, playlistIds = [], { cache
     if (r?.ok) {
       cache[pid] = r.data.items || [];
     } else {
-      // mark as failed empty to avoid repeated immediate retries
       cache[pid] = cache[pid] || [];
     }
   });
 
-  try { sessionStorage.setItem(cacheKey, JSON.stringify(cache)); } catch (e) { /* ignore */ }
-  // return mapping id -> items (may be empty arrays)
+  try { sessionStorage.setItem(cacheKey, JSON.stringify(cache)); } catch (e) {}
   const out = {};
   playlistIds.forEach((id) => { out[id] = cache[id] || []; });
   return out;
