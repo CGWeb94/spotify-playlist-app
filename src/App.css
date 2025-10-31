@@ -124,30 +124,14 @@ body {
 
 /* Genre / Year tile */
 .genre-tile {
-  width: 260px;
-  height: 160px;
-  border-radius: 10px;
-  background-size: cover;
-  background-position: center;
+  /* fixed width/height removed so grid cells control sizing */
   position: relative;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-  cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease;
+  border-radius: 10px;
   overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  transition: transform .18s ease, box-shadow .18s ease;
 }
-.genre-tile:hover { transform: translateY(-6px); box-shadow: 0 28px 56px rgba(0,0,0,0.75); }
-.genre-tile-overlay {
-  position: absolute;
-  inset: 0;
-  display:flex;
-  flex-direction:column;
-  justify-content:flex-end;
-  padding: 12px;
-  background: linear-gradient(transparent, rgba(0,0,0,0.6));
-  color: var(--text-main);
-}
-.genre-title { font-size: 20px; font-weight: 700; }
-.genre-sub { font-size: 13px; color: var(--text-sub); }
 
 /* GenreTracks list */
 .genre-tracks { text-align: left; padding: 12px; border-radius: 8px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); }
