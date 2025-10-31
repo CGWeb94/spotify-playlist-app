@@ -388,3 +388,11 @@ button:disabled { display: none !important; }
 .nav-item i.fa-star { color: var(--spotify-green); }
 
 nav.sidebar-nav .nav-item i.fa-star { color: #fff; }
+
+/* paginated grid styles */
+.paginated-grid .grid-items { display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; }
+.grid-pagination { display:flex; gap:8px; align-items:center; margin-top:12px; }
+.grid-pagination .page-indicator { color: var(--text-sub); font-size:13px; }
+
+/* ensure genre/playlist tiles still line up */
+.genre-tile, .playlist-tile { display:inline-block; }
